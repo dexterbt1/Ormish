@@ -3,50 +3,22 @@ package Ormish;
 use warnings;
 use strict;
 
+our $VERSION = '0.1000';
+
+1; # End of Ormish
+
+__END__
+
 =head1 NAME
 
-Ormish - The great new Ormish!
-
-=head1 VERSION
-
-Version 0.01
-
-=cut
-
-our $VERSION = '0.01';
-
+Ormish - an alternative object relational mapper
 
 =head1 SYNOPSIS
-
-Quick summary of what the module does.
-
-Perhaps a little code snippet.
 
     use Ormish;
 
     my $foo = Ormish->new();
     ...
-
-=head1 EXPORT
-
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
-
-=head1 SUBROUTINES/METHODS
-
-=head2 function1
-
-=cut
-
-sub function1 {
-}
-
-=head2 function2
-
-=cut
-
-sub function2 {
-}
 
 =head1 AUTHOR
 
@@ -98,13 +70,10 @@ L<http://search.cpan.org/dist/Ormish/>
 
 Copyright 2011 Dexter Tad-y.
 
-This program is free software; you can redistribute it and/or modify it
-under the terms of either: the GNU General Public License as published
-by the Free Software Foundation; or the Artistic License.
+This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 See http://dev.perl.org/licenses/ for more information.
 
 
 =cut
 
-1; # End of Ormish
