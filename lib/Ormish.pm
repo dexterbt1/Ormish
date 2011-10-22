@@ -5,6 +5,10 @@ use strict;
 
 our $VERSION = '0.1000';
 
+use Ormish::Store;
+use Ormish::Mapping;
+use Ormish::OID::Serial;
+
 1; # End of Ormish
 
 __END__
