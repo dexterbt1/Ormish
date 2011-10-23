@@ -1,4 +1,4 @@
-package Ormish::Store;
+package Ormish::DataStore;
 use strict;
 use Moose;
 use Scalar::Util qw/refaddr/;
@@ -32,7 +32,7 @@ sub add {
     my $class = ref($obj) || '';
     my $mapping = $self->mapping_of_class($class);
 
-    # object is not yet managed by other store instances
+    # object is not yet managed by other datastore instances
     if (exists $store_of{$obj}) {
         (refaddr($store_of{$obj}) eq refaddr($self))
             or Carp::croak("Cannot add object managed by another ".ref($self)." instance");

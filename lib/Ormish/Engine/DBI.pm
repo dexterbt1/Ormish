@@ -6,9 +6,9 @@ use DBIx::Simple;
 has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new });
 
 sub insert {
-    my ($self, $store, $obj) = @_;
+    my ($self, $datastore, $obj) = @_;
     my $class = ref($obj) || '';
-    my $mapping = $store->mapping_of_class($class);
+    my $mapping = $datastore->mapping_of_class($class);
 
     # FIXME: how do we handle multi-table inheritance
     my $dest_table = $mapping->table;
@@ -17,7 +17,7 @@ sub insert {
         $mapping->column_values_for($obj),
     );
 
-    my $db = DBIx::Simple->new($store->dbh);
+    my $db = DBIx::Simple->new($datastore->dbh);
     $db->query($stmt, @bind)->flat; 
 
     # FIXME: how do we handle multi-table inheritance
