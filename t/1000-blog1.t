@@ -53,7 +53,7 @@ $ds->register_mapping( My::Blog::_DEFAULT_MAPPING );
 
     $blog->title('Shiny New Blog');
     $ds->flush;
-    #is scalar(@sql), 2;
+    is scalar(@sql), 2;
 }
 
 ok 1;

@@ -26,6 +26,16 @@ sub of { # ---Function
     return (exists $store_of{$addr}) ? $store_of{$addr} : undef;
 }
 
+sub obj_is_dirty {
+    my ($self, $obj) = @_;
+    return (exists $is_dirty{refaddr($self)}) ? exists($is_dirty{refaddr($self)}{refaddr($obj)}) : 0;
+}
+
+sub clean_dirty_obj {
+    my ($self, $obj) = @_;
+    delete $is_dirty{refaddr($self)}{refaddr($obj)};
+}
+
 sub idmap_add {
     my ($self, $obj) = @_;
     my $obj_class = ref($obj) || '';
@@ -52,19 +62,14 @@ sub add {
             or Carp::croak("Cannot add object managed by another ".ref($self)." instance");
     }
     $store_of{$obj_addr} = $self;
+    weaken $store_of{$obj_addr};
 
     my $obj_oid = $mapping->oid->as_str( $obj );
     if (not defined $obj_oid) {
         # not yet in identity map
         push @{$self->_work_queue}, [ 'new_object', $self, $obj ];
     }
-    else {
-        if (not exists $ident_of{refaddr($self)}{$class}{$obj_oid}) {
-        }
-        else {
-            # ...
-        }
-    }
+    # TODO: traverse attributes and relationships ...
 }
 
 sub flush {
@@ -108,7 +113,7 @@ sub _add_to_mappings {
     # FIXME: check conflicts / integrity with other classes
     $self->_mappings->{$class} = $m;
     # ---
-    # NOTE: this is invasive, so make this a one time thing
+    # NOTE: this is invasive, so make this generic and a one time thing
     if (not exists $classes_with_hooks{$class}) {
         # install destructor hooks
         my $on_demolish_hook = sub {
@@ -123,6 +128,7 @@ sub _add_to_mappings {
                 }
                 # delete store mapping
                 delete $store_of{refaddr($o)};
+                delete $is_dirty{refaddr($st)}{refaddr($o)};
             }
         };
         my $metaclass = $class->meta;
@@ -132,6 +138,24 @@ sub _add_to_mappings {
         else {
             my $meth = Class::MOP::Method->wrap($on_demolish_hook, name => 'DEMOLISH', package_name => $class);
             $metaclass->add_method( DEMOLISH => $meth );
+        }
+        # install dirty detectors, 
+        #       i.e. detect if the object was modified via writers/accessor, then mark as dirty
+        my $on_modify_mark_dirty = sub {
+            my $o = shift @_;
+            if (scalar @_ > 0) {
+                my $st = Ormish::DataStore::of($o); 
+                if ($st) {
+                    # mark as dirty
+                    $is_dirty{refaddr($st)}{refaddr($o)} = 1;
+                    push @{$st->_work_queue}, [ 'update_dirty', $self, $o ];
+                }
+            }
+        };
+        foreach my $attr ($metaclass->get_all_attributes) {
+            my $writer_name = $attr->writer || $attr->accessor;
+            next if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
+            $metaclass->add_before_method_modifier( $writer_name, $on_modify_mark_dirty );
         }
 
         $classes_with_hooks{$class} = 1;

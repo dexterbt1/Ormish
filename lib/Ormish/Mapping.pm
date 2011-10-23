@@ -18,18 +18,24 @@ sub BUILD {
 }
 
 sub table_rows_of {
-    my ($self, $obj) = @_;
+    my ($self, $obj, $for_where) = @_;
     my $table = $self->table;
     my @rows = ();
     {
         my %row = ();
+        my %where = ();
         foreach my $at (@{$self->attributes}) {
             $row{$at} = $obj->$at();
         }
-        push @rows, \%row;
+        if ($for_where) { # update or delete
+            %where = %{ $self->oid->col_to_values($obj) };
+        }
+        # ---
+        push @rows, [ \%row, \%where ];
     }
     return { $table => \@rows };
 }
+
 
 
 1;

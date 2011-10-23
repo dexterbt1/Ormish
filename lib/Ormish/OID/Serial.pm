@@ -23,6 +23,14 @@ sub is_db_generated {
     return 1; # yes!
 }
 
+sub col_to_values {
+    my ($self, $obj) = @_;
+    my $attr = $obj->meta->get_attribute($self->attr);
+    return { 
+        $self->column() => $attr->get_value($obj),
+    };
+}
+
 
 1;
 

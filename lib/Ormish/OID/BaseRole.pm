@@ -8,6 +8,8 @@ requires 'set_object_identity';
 
 requires 'is_db_generated';
 
+requires 'col_to_values';
+
 
 1;
 
