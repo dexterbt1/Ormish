@@ -17,13 +17,18 @@ sub BUILD {
 
 }
 
-sub column_values_for {
+sub table_rows_of {
     my ($self, $obj) = @_;
-    my %col_to_val = ();
-    foreach my $at (@{$self->attributes}) {
-        $col_to_val{$at} = $obj->$at();
+    my $table = $self->table;
+    my @rows = ();
+    {
+        my %row = ();
+        foreach my $at (@{$self->attributes}) {
+            $row{$at} = $obj->$at();
+        }
+        push @rows, \%row;
     }
-    return \%col_to_val;
+    return { $table => \@rows };
 }
 
 
