@@ -12,7 +12,11 @@
             for_class       => __PACKAGE__,
             table           => 'blog_blog',
             oid             => Ormish::OID::Serial->new( column => 'id', attr => 'id' ),
-            attributes      => [qw/name title tagline/],
+            attributes      => [qw/
+                name 
+                title 
+                tagline|c_tag_line
+            /],
         );
     }
     1;
@@ -27,7 +31,7 @@ use DBIx::Simple;
 use Ormish;
 
 my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
-$dbh->do('CREATE TABLE blog_blog (id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, tagline VARCHAR)');
+$dbh->do('CREATE TABLE blog_blog (id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, c_tag_line VARCHAR)');
 $dbh->commit;
 
 my @sql = ();
@@ -81,7 +85,7 @@ my $ds = Ormish::DataStore->new(
     is scalar(@sql), 2; # insert + select
     is Ormish::DataStore::of($b1), $ds;
 
-    DBIx::Simple->new($dbh)->query(q{INSERT INTO blog_blog (id,name,title,tagline) VALUES (??)},
+    DBIx::Simple->new($dbh)->query(q{INSERT INTO blog_blog (id,name,title,c_tag_line) VALUES (??)},
         123, 'some-random-blog', 'Some Random Blog', '... nothing here, move along',
         );
 

@@ -49,6 +49,13 @@ sub attr_to_col {
     };
 }
 
+sub col_to_attr {
+    my ($self) = @_;
+    return { 
+        $self->column() => $self->attr,
+    };
+}
+
 
 1;
 

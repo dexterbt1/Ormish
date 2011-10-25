@@ -59,7 +59,9 @@ sub get_object_from_hashref {
         # return cached copy from identity map
         return $ident_of{refaddr($self)}{$obj_class}{$oid_str};
     }
-    my $o = $mapping->for_class->new( %$h );
+    my $c2a = $mapping->col_to_attr(1);
+    my %oh = map { $c2a->{$_} => $h->{$_} } keys %$h;
+    my $o = $mapping->for_class->new( %oh );
     # bind obj to datastore 
     my $obj_addr = refaddr($o);
     $store_of{$obj_addr} = $self;
