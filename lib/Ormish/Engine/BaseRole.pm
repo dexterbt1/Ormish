@@ -11,6 +11,8 @@ requires qw/
     rollback
 
     get_object_by_oid
+
+    execute_query
 /;
 
 1;

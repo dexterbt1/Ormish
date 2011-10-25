@@ -33,6 +33,7 @@ $dbh->commit;
 my @sql = ();
 my $ds = Ormish::DataStore->new( 
     engine      => Ormish::Engine::DBI->new( dbh => $dbh, log_sql => \@sql ), 
+    auto_map    => 1,
 );
 
 
@@ -63,7 +64,7 @@ my $ds = Ormish::DataStore->new(
     is $blog->title, 'The Ormish Blog';
     is $blog->tagline, 'an alternative object-relational persistence for moose objects';
 
-    my $blog2 = My::Blog->new( name => 'another blog', title => 'A Proper Title' );
+    my $blog2 = My::Blog->new( name => 'foo.bar', title => 'A Proper Title' );
     $ds->add($blog2);
     is Ormish::DataStore::of($blog2), $ds;
     $ds->rollback;
@@ -81,14 +82,14 @@ my $ds = Ormish::DataStore->new(
     is Ormish::DataStore::of($b1), $ds;
 
     DBIx::Simple->new($dbh)->query(q{INSERT INTO blog_blog (id,name,title,tagline) VALUES (??)},
-        123, 'SomeRandomBlog', 'Some Random Blog', '... nothing here, move along',
+        123, 'some-random-blog', 'Some Random Blog', '... nothing here, move along',
         );
 
     my $b2 = $ds->query('My::Blog')->get(123);
     isa_ok $b2, 'My::Blog';
     is Ormish::DataStore::of($b2), $ds;
     is $b2->id, 123;
-    is $b2->name, 'SomeRandomBlog';
+    is $b2->name, 'some-random-blog';
     is $b2->title, 'Some Random Blog';
     is $b2->tagline, '... nothing here, move along';
     is scalar(@sql), 3;
@@ -96,6 +97,29 @@ my $ds = Ormish::DataStore->new(
     $ds->add($b2);
     $ds->commit;
     is scalar(@sql), 3;
+
+    # --- query result
+
+    my $c;
+    my $result;
+    my @all;
+
+    # iterator interface
+    $result = $ds->query('My::Blog')->execute; # should be all 3
+    while (my $b = $result->next) {
+        isa_ok $b, 'My::Blog';
+        $c++;
+    }
+    is $c, 3;
+
+    # pull all into memory as a arrayref
+    #$result = $ds->query('My::Blog')->execute;
+    #@all = $result->list;
+    #is scalar(@all), 3;
+    #isa_ok $all[0], 'My::Blog';
+    #isa_ok $all[1], 'My::Blog';
+    #isa_ok $all[2], 'My::Blog';
+    
 
     
 }

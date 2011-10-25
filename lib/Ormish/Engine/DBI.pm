@@ -113,6 +113,28 @@ sub get_object_by_oid {
 }
 
 
+sub execute_query {
+    my ($self, $datastore, $query) = @_;
+    my @class_tables = $query->get_result_class_tables;
+    my %c2t = @class_tables;
+    (scalar(keys %c2t) == 1)
+        or Carp::confess("unsupported number of result_types, try 1 for now");
+    # TODO: add joins later
+    # TODO: add multi-table mapping of a class
+    {
+        my ($class, $table) = (shift @class_tables, shift @class_tables);
+        my ($stmt, @bind) = $self->sql_abstract->select(
+            -from           => [ $table ],
+        );
+        my $r = $self->dbixs->query($stmt, @bind);
+        return Ormish::Engine::DBI::QueryResult->new(
+            datastore       => $datastore,
+            query           => $query,
+            dbixs_result    => $r,
+        );
+    }
+}
+
 
 sub debug {
     my ($self, $info) = @_;
@@ -120,5 +142,47 @@ sub debug {
 }
 
 
+# ============================================================================
+
+package Ormish::Engine::DBI::QueryResult;
+use Moose;
+use Carp ();
+with 'Ormish::Query::ResultRole';
+
+has 'dbixs_result'      => (is => 'rw', isa => 'DBIx::Simple::Result', required => 1);
+has '_cache_result_ct'  => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
+
+sub BUILD {
+    my ($self) = @_;
+    my @result_class_tables = $self->query->get_result_class_tables;
+    $self->_cache_result_ct( \@result_class_tables );
+}
+
+sub _next_row {
+    my ($self) = @_;
+    my $row = $self->dbixs_result->hash; 
+}
+
+sub next {
+    my ($self) = @_;
+    my $row = $self->_next_row();
+    return if (not $row);
+    # for now, build only 1 class 
+    my ($class, $table) = @{$self->_cache_result_ct};
+    my $mapping = $self->datastore->mapping_of_class($class);
+    return $self->datastore->get_object_from_hashref($mapping, $row);
+}
+
+sub list {
+    my ($self) = @_;
+    my @out = ();
+    while (my $b = $self->next) {
+        push @out, $self->next;
+    }
+    return @out;
+}
+
+
 1;
+
 __END__

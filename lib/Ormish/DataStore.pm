@@ -5,14 +5,16 @@ use Scalar::Util qw/refaddr weaken/;
 use Carp();
 use YAML;
 
-use Ormish::Engine::DBI;
 use Ormish::Query;
+use Ormish::Engine::DBI;
 
-has 'engine'        => (is => 'rw', isa => 'Ormish::Engine::BaseRole', );
-has 'debug_log'     => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
+has 'engine'            => (is => 'ro', isa => 'Ormish::Engine::BaseRole', );
+has 'auto_map'          => (is => 'ro', isa => 'Bool', default => sub { 0 });
+has 'auto_map_method'   => (is => 'rw', isa => 'Str', default => sub { '_ORMISH_MAPPING' } );
+has 'debug_log'         => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
 
-has '_mappings'     => (is => 'rw', isa => 'HashRef[Str]', default => sub { { } });
-has '_work_queue'   => (is => 'rw', isa => 'ArrayRef', default => sub { [] } );
+has '_mappings'         => (is => 'ro', isa => 'HashRef[Str]', default => sub { { } });
+has '_work_queue'       => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
 
 # ---
 my %store_of = ();
@@ -74,7 +76,7 @@ sub add {
     # TODO: possible convenience to cache and auto map those classes with _DEFAULT_MAPPING
     my $obj_addr = refaddr($obj);
     my $class   = ref($obj) || '';
-    my $mapping = $self->mapping_of_class($class, 1);
+    my $mapping = $self->mapping_of_class($class);
 
     # object is not yet managed by other datastore instances
     if (exists $store_of{$obj_addr}) {
@@ -141,11 +143,12 @@ sub query {
 # --- helper routines
 
 sub mapping_of_class {
-    my ($self, $class, $use_default) = @_;
-    if ($use_default) {
+    my ($self, $class) = @_;
+    if ($self->auto_map) {
         if (! exists $self->_mappings->{$class}) {
-            if ($class->can('_ORMISH_MAPPING')) {
-                my $m = $class->_ORMISH_MAPPING;
+            my $method = $self->auto_map_method;
+            if ($class->can($method)) {
+                my $m = $class->$method;
                 $self->_add_to_mappings( $m );
             }
         }
