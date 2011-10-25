@@ -6,9 +6,10 @@ use Ormish::Query::Result;
 
 has 'datastore'         => (is => 'ro', isa => 'Ormish::DataStore', required => 1);
 has 'result_types'      => (is => 'rw', isa => 'ArrayRef[Str]');
+has '_filter_cond'      => (is => 'rw', isa => 'ArrayRef');
 
 
-sub get_result_class_tables {
+sub meta_result_class_tables {
     my ($self) = @_;
     my @class_tables = ();
     foreach my $rt (@{$self->result_types}) {
@@ -31,6 +32,11 @@ sub get_result_class_tables {
     return @class_tables;
 }
 
+sub meta_filter_condition {
+    my ($self) = @_;
+    return $self->_filter_cond;
+}
+
 
 sub get {
     my ($self, $oid) = @_;
@@ -42,11 +48,20 @@ sub get {
 }
 
 
-sub execute {
+sub select {
     my ($self) = @_;
     $self->datastore->flush;
-    return $self->datastore->engine->execute_query($self->datastore, $self);
+    return $self->datastore->engine->do_select($self->datastore, $self);
 }
+
+
+sub where {
+    my $self = shift @_;
+    $self->_filter_cond(\@_);
+    return $self;
+}
+
+
 
 1;
 

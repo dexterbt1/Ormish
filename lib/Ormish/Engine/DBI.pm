@@ -1,5 +1,6 @@
 package Ormish::Engine::DBI;
 use Moose;
+use Scalar::Util qw/blessed/;
 use SQL::Abstract::More;
 use DBIx::Simple;
 use Ormish::Engine::BaseRole;
@@ -113,19 +114,65 @@ sub get_object_by_oid {
 }
 
 
-sub execute_query {
+sub do_select {
     my ($self, $datastore, $query) = @_;
-    my @class_tables = $query->get_result_class_tables;
+    my @class_tables = $query->meta_result_class_tables;
     my %c2t = @class_tables;
     (scalar(keys %c2t) == 1)
         or Carp::confess("unsupported number of result_types, try 1 for now");
+    
     # TODO: add joins later
     # TODO: add multi-table mapping of a class
     {
         my ($class, $table) = (shift @class_tables, shift @class_tables);
-        my ($stmt, @bind) = $self->sql_abstract->select(
-            -from           => [ $table ],
+        my $from_spec = [ '{'.$class.'}' ];
+        my ($sql_sel, @sql_sel_bind) = $self->sql_abstract->select( -from => $from_spec );
+
+        my $where_spec = $query->meta_filter_condition;
+        my ($sql_where, @sql_where_bind) = ('', );
+        if ($where_spec) {
+            ($sql_where, @sql_where_bind) = @$where_spec;
+            $sql_where = 'WHERE '.$sql_where;
+        }
+
+        my $stmt = join(' ',
+            $sql_sel,
+            $sql_where,
+            # ...
+            # ... more here later TODO
         );
+
+        # auto string-substition
+        # ---
+        my %tokv = ();
+        my %aliases = %c2t;
+
+        # tokenize
+        my %tmptoks = map { $_ => 1 } ($stmt =~ /\{(.*?)\}/g);
+        my %tokclasses = ();
+        # TODO: identify and split aliases
+        foreach my $tok (keys %tmptoks) {
+            next if (exists $tokv{$tok});
+            if ($tok->can('meta') and $tok->meta->isa('Moose::Meta::Class')) {
+                my $m = $datastore->mapping_of_class($tok);
+                $tokv{$tok} = $m->table;
+                $tokclasses{$tok} = 1;
+                # oid 
+                my @oid_cols = $m->oid->get_column_names;
+                %tokv = (%tokv, %{$m->oid->attr_to_col});
+                # regular attributes
+                %tokv = (%tokv, %{$m->attr_to_col});
+            }
+        }
+        foreach my $tok (keys %tokv) {
+            my $v = $tokv{$tok};
+            my $pat = '{'.$tok.'}';
+            $stmt =~ s[$pat][$v]g;
+        }
+
+        my @bind = (@sql_sel_bind, @sql_where_bind);
+
+        # do query
         my $r = $self->dbixs->query($stmt, @bind);
         return Ormish::Engine::DBI::QueryResult->new(
             datastore       => $datastore,
@@ -154,7 +201,7 @@ has '_cache_result_ct'  => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] 
 
 sub BUILD {
     my ($self) = @_;
-    my @result_class_tables = $self->query->get_result_class_tables;
+    my @result_class_tables = $self->query->meta_result_class_tables;
     $self->_cache_result_ct( \@result_class_tables );
 }
 

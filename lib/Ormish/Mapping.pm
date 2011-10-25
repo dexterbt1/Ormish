@@ -36,8 +36,13 @@ sub table_rows_of {
     return { $table => \@rows };
 }
 
-sub new_from_hash {
-    my ($self, $rowh) = @_;
+
+sub attr_to_col {
+    my ($self) = @_;
+    return {
+        # TODO: no aliasing for now
+        map { $_ => $_ } @{$self->attributes}
+    };
 }
 
 

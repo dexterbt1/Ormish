@@ -105,21 +105,30 @@ my $ds = Ormish::DataStore->new(
     my @all;
 
     # iterator interface
-    $result = $ds->query('My::Blog')->execute; # should be all 3
+    $result = $ds->query('My::Blog')->select; # should be all 3
     while (my $b = $result->next) {
         isa_ok $b, 'My::Blog';
         $c++;
     }
     is $c, 3;
 
-    # pull all objects into memory as an arrayref
-    $result = $ds->query('My::Blog')->execute;
+    # pull all objects into memory as a list
+    $result = $ds->query('My::Blog')->select;
     @all = $result->list;
     is scalar(@all), 3;
     isa_ok $all[0], 'My::Blog';
     isa_ok $all[1], 'My::Blog';
     isa_ok $all[2], 'My::Blog';
-    
+
+    # basic where
+    $result = $ds->query('My::Blog')->where('{title} LIKE ?', '%blog')->select;
+    @all = $result->list;
+    is scalar(@all), 2;
+
+    # limit
+    #$result = $ds->query('My::Blog')->where('{id} > ?', 0)->limit(1)->select;
+    #@all = $result->list;
+    #is scalar(@all), 1;
 
     
 }
