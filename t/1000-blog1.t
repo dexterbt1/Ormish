@@ -112,13 +112,13 @@ my $ds = Ormish::DataStore->new(
     }
     is $c, 3;
 
-    # pull all into memory as a arrayref
-    #$result = $ds->query('My::Blog')->execute;
-    #@all = $result->list;
-    #is scalar(@all), 3;
-    #isa_ok $all[0], 'My::Blog';
-    #isa_ok $all[1], 'My::Blog';
-    #isa_ok $all[2], 'My::Blog';
+    # pull all objects into memory as an arrayref
+    $result = $ds->query('My::Blog')->execute;
+    @all = $result->list;
+    is scalar(@all), 3;
+    isa_ok $all[0], 'My::Blog';
+    isa_ok $all[1], 'My::Blog';
+    isa_ok $all[2], 'My::Blog';
     
 
     

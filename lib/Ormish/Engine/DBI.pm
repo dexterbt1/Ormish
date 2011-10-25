@@ -177,7 +177,7 @@ sub list {
     my ($self) = @_;
     my @out = ();
     while (my $b = $self->next) {
-        push @out, $self->next;
+        push @out, $b;
     }
     return @out;
 }
