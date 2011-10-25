@@ -7,18 +7,12 @@
     has 'tagline'       => (is => 'rw', isa => 'Str');
     
     use Ormish;
-    sub _DEFAULT_MAPPING {
+    sub _ORMISH_MAPPING {
         return Ormish::Mapping->new( 
             for_class       => __PACKAGE__,
             table           => 'blog_blog',
             oid             => Ormish::OID::Serial->new( column => 'id', attr => 'id' ),
             attributes      => [qw/name title tagline/],
-            # ---
-            # reader          => Ormish::Mapping::Read::Table->new( from => 'blog_blog' ),
-            # writer          => Ormish::Mapping::Write::Table->new( to => 'blog_blog' ),
-            # ---
-            # reader          => Ormish::Mapping::Read::MultiTable( from => [qw//]
-            # writer          => Ormish::Mapping::Write::MultiTable( to => { 'table1' => [ ], 'table2' => [ ] } )
         );
     }
     1;
@@ -30,30 +24,36 @@ use DBI;
 use Ormish;
 use Test::More qw/no_plan/;
 
-my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1 });
+my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
 $dbh->do('CREATE TABLE blog_blog (id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, tagline VARCHAR)');
+$dbh->commit;
 
 my @sql = ();
 my $ds = Ormish::DataStore->new( dbh => $dbh, debug_log => \@sql );
 
-$ds->register_mapping( My::Blog::_DEFAULT_MAPPING );
 
 {
-    my $blog = My::Blog->new( name => 'Test' );
+    my $blog = My::Blog->new( name => 'ormish-blog' );
     ok not defined $blog->id;
     ok not defined Ormish::DataStore::of($blog);
     is scalar(@sql), 0;
 
     $ds->add( $blog );
-    $ds->flush;
+    $ds->flush; # insert
 
     ok defined $blog->id;
     is Ormish::DataStore::of($blog), $ds;
     is scalar(@sql), 1;
 
-    $blog->title('Shiny New Blog');
-    $ds->flush;
+    $blog->title('The Ormish Blog');
+    $blog->tagline('an alternative object-relational persistence for moose objects');
+    $ds->commit; # flush (update) and commit!
     is scalar(@sql), 2;
+
+    #$blog->title('The Orcish Blog');
+    #$ds->rollback;
+    #my $blog2 = My::Blog->new( name => 'another blog', title => 'A Proper Title' );
+    #$ds->add($blog2);
 }
 
 ok 1;

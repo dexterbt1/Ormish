@@ -7,7 +7,15 @@ use YAML;
 
 use Ormish::Engine::DBI;
 
-has 'dbh'           => (is => 'rw', isa => 'DBI::db', trigger => sub { $_[1]->{RaiseError} = 1 }, required => 1);
+has 'dbh'           => (is          => 'rw', 
+                        isa         => 'DBI::db', 
+                        required    => 1,
+                        trigger     => sub { 
+                                        $_[1]->{RaiseError} = 1;
+                                        (not $_[1]->{AutoCommit}) or Carp::confess("AutoCommit is not supported");
+                                    },
+                        );
+                        
 has 'engine'        => (is => 'rw', isa => 'Ormish::Engine::DBI', default => sub { Ormish::Engine::DBI->new });
 has 'debug_log'     => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
 
@@ -54,7 +62,7 @@ sub add {
     # TODO: possible convenience to cache and auto map those classes with _DEFAULT_MAPPING
     my $obj_addr = refaddr($obj);
     my $class   = ref($obj) || '';
-    my $mapping = $self->mapping_of_class($class);
+    my $mapping = $self->mapping_of_class($class, 1);
 
     # object is not yet managed by other datastore instances
     if (exists $store_of{$obj_addr}) {
@@ -80,10 +88,27 @@ sub flush {
     }
 }
 
+sub commit {
+    my ($self) = @_;
+    $self->flush;
+    $self->dbh->commit;
+}
+
+
+# --- helper routines
+
 sub mapping_of_class {
-    my ($self, $class) = @_;
+    my ($self, $class, $use_default) = @_;
+    if ($use_default) {
+        if (! exists $self->_mappings->{$class}) {
+            if ($class->can('_ORMISH_MAPPING')) {
+                my $m = $class->_ORMISH_MAPPING;
+                $self->_add_to_mappings( $m );
+            }
+        }
+    }
     (exists $self->_mappings->{$class})
-        or Carp::croak("Cannot add object of unmapped class: $class");
+        or Carp::croak("Unable to find mapping for class: $class");
     return $self->_mappings->{$class};
 }
 
@@ -169,6 +194,7 @@ sub log_debug {
 
 sub DEMOLISH {
     my ($self) = @_;
+    # FIXME: $self->rollback;
     delete $ident_of{refaddr($self)}; # clear identity map
 }
 
