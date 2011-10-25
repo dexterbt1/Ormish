@@ -29,7 +29,9 @@ $dbh->do('CREATE TABLE blog_blog (id INTEGER PRIMARY KEY, name VARCHAR, title VA
 $dbh->commit;
 
 my @sql = ();
-my $ds = Ormish::DataStore->new( dbh => $dbh, debug_log => \@sql );
+my $ds = Ormish::DataStore->new( 
+    engine      => Ormish::Engine::DBI->new( dbh => $dbh, log_sql => \@sql ), 
+);
 
 
 {
@@ -50,8 +52,12 @@ my $ds = Ormish::DataStore->new( dbh => $dbh, debug_log => \@sql );
     $ds->commit; # flush (update) and commit!
     is scalar(@sql), 2;
 
-    #$blog->title('The Orcish Blog');
-    #$ds->rollback;
+    $blog->tagline('rubbish tagline for now, only to be discarded later');
+    $blog->title('The Orcish Blog');
+    $ds->rollback;
+    is $blog->title, 'The Ormish Blog';
+    is $blog->tagline, 'an alternative object-relational persistence for moose objects';
+
     #my $blog2 = My::Blog->new( name => 'another blog', title => 'A Proper Title' );
     #$ds->add($blog2);
 }

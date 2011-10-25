@@ -7,16 +7,7 @@ use YAML;
 
 use Ormish::Engine::DBI;
 
-has 'dbh'           => (is          => 'rw', 
-                        isa         => 'DBI::db', 
-                        required    => 1,
-                        trigger     => sub { 
-                                        $_[1]->{RaiseError} = 1;
-                                        (not $_[1]->{AutoCommit}) or Carp::confess("AutoCommit is not supported");
-                                    },
-                        );
-                        
-has 'engine'        => (is => 'rw', isa => 'Ormish::Engine::DBI', default => sub { Ormish::Engine::DBI->new });
+has 'engine'        => (is => 'rw', isa => 'Ormish::Engine::BaseRole', );
 has 'debug_log'     => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
 
 has '_mappings'     => (is => 'rw', isa => 'HashRef[Str]', default => sub { { } });
@@ -27,6 +18,7 @@ my %store_of = ();
 my %ident_of = ();
 my %is_dirty = ();
 my %classes_with_hooks = ();
+
 
 sub of { # ---Function
     my ($obj) = @_;
@@ -75,7 +67,7 @@ sub add {
     my $obj_oid = $mapping->oid->as_str( $obj );
     if (not defined $obj_oid) {
         # not yet in identity map
-        push @{$self->_work_queue}, [ 'new_object', $self, $obj ];
+        push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ ] ];
     }
     # TODO: traverse attributes and relationships ...
 }
@@ -83,7 +75,8 @@ sub add {
 sub flush {
     my ($self) = @_;
     while (my $work = shift @{$self->_work_queue}) {
-        my ($engine_method, @params) = @$work;
+        my ($engine_job, $undo) = @$work;
+        my ($engine_method, @params) = @$engine_job;
         $self->engine->$engine_method(@params);
     }
 }
@@ -91,7 +84,24 @@ sub flush {
 sub commit {
     my ($self) = @_;
     $self->flush;
-    $self->dbh->commit;
+    $self->engine->commit;
+}
+
+sub rollback {
+    my ($self) = @_;
+    return if (not defined $self->engine);
+    $self->engine->rollback;
+    while (my $work = pop @{$self->_work_queue}) {
+        my ($engine_job, $undo) = @$work;
+        my ($engine_method, @params) = @$engine_job;
+        my $undo_method = $engine_method.'_undo';
+        $self->engine->$undo_method(@params);
+        if ($undo) {
+            foreach my $u (@$undo) {
+                $u->();
+            }
+        }
+    }
 }
 
 
@@ -166,35 +176,37 @@ sub _add_to_mappings {
         }
         # install dirty detectors, 
         #       i.e. detect if the object was modified via writers/accessor, then mark as dirty
-        my $on_modify_mark_dirty = sub {
-            my $o = shift @_;
-            if (scalar @_ > 0) {
-                my $st = Ormish::DataStore::of($o); 
-                if ($st) {
-                    # mark as dirty
-                    $is_dirty{refaddr($st)}{refaddr($o)} = 1;
-                    push @{$st->_work_queue}, [ 'update_dirty', $self, $o ];
+        my $get_on_modify_mark_dirty = sub {
+            my ($mod_attr) = @_;
+            return sub {
+                my $o = shift @_;
+                if (scalar @_ > 0) {
+                    my $st = Ormish::DataStore::of($o); 
+                    if ($st) {
+                        # mark as dirty
+                        $is_dirty{refaddr($st)}{refaddr($o)} = 1;
+                        my $old_value = $mod_attr->get_value($o);
+                        my $undo_attr_set = sub { 
+                            $mod_attr->set_raw_value($o, $old_value); 
+                        };
+                        push @{$st->_work_queue}, [ [ 'update_object', $self, $o, ], [ $undo_attr_set ] ];
+                    }
                 }
-            }
+            };
         };
         foreach my $attr ($metaclass->get_all_attributes) {
             my $writer_name = $attr->writer || $attr->accessor;
             next if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
-            $metaclass->add_before_method_modifier( $writer_name, $on_modify_mark_dirty );
+            $metaclass->add_before_method_modifier( $writer_name, $get_on_modify_mark_dirty->($attr) );
         }
 
         $classes_with_hooks{$class} = 1;
     }
 }
 
-sub log_debug {
-    my ($self, $info) = @_;
-    push @{$self->debug_log}, $info;
-}
-
 sub DEMOLISH {
     my ($self) = @_;
-    # FIXME: $self->rollback;
+    $self->rollback;
     delete $ident_of{refaddr($self)}; # clear identity map
 }
 
