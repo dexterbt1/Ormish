@@ -1,13 +1,17 @@
 package Ormish::Engine::BaseRole;
 use Moose::Role;
 
-requires 'insert_object';
-requires 'insert_object_undo';
-requires 'update_object';
-requires 'update_object_undo';
+requires qw/
+    insert_object
+    insert_object_undo
+    update_object
+    update_object_undo
 
-requires 'commit';
-requires 'rollback';
+    commit
+    rollback
+
+    get_object_by_oid
+/;
 
 1;
 __END__

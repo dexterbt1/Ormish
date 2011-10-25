@@ -18,7 +18,7 @@ sub BUILD {
 }
 
 sub table_rows_of {
-    my ($self, $obj, $for_where) = @_;
+    my ($self, $obj, $with_where) = @_;
     my $table = $self->table;
     my @rows = ();
     {
@@ -27,13 +27,17 @@ sub table_rows_of {
         foreach my $at (@{$self->attributes}) {
             $row{$at} = $obj->$at();
         }
-        if ($for_where) { # update or delete
+        if ($with_where) { # update or delete
             %where = %{ $self->oid->col_to_values($obj) };
         }
         # ---
         push @rows, [ \%row, \%where ];
     }
     return { $table => \@rows };
+}
+
+sub new_from_hash {
+    my ($self, $rowh) = @_;
 }
 
 

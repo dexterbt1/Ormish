@@ -14,14 +14,14 @@ has 'dbh'           => (is          => 'ro',
                                         (not $_[1]->{AutoCommit}) or Carp::confess("AutoCommit is not supported");
                                     },
                         );
-                        
+has 'dbixs'         => (is => 'rw', isa => 'DBIx::Simple', lazy => 1, default => sub { DBIx::Simple->new($_[0]->dbh) });
 has 'log_sql'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
 has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new });
 
 sub insert_object {
     my ($self, $datastore, $obj) = @_;
 
-    my $db = DBIx::Simple->new($self->dbh);
+    my $db = $self->dbixs;
 
     my $class = ref($obj) || '';
     my $mapping = $datastore->mapping_of_class($class);
@@ -90,6 +90,29 @@ sub rollback {
     my ($self) = @_;
     $self->dbh->rollback;
 }
+
+
+sub get_object_by_oid {
+    my ($self, $datastore, $class, $oid) = @_;
+    my $db = $self->dbixs;
+    my $mapping = $datastore->mapping_of_class($class);
+    my @oid_cols = $mapping->oid->get_column_names;
+    if (scalar(@oid_cols) == 1) {
+        my ($oid_col) = @oid_cols;
+        my ($stmt, @bind) = $self->sql_abstract->select( 
+            -from       => [ $mapping->table ],
+            -where      => { $oid_col => $oid },
+            -limit      => 1,
+        );
+        my $r = $db->query($stmt, @bind);
+        $self->debug([ $stmt, \@bind ]);
+        my $h = $r->hash;
+        return if (not defined $h);
+        return $datastore->get_object_from_hashref($mapping, $h);
+    }
+}
+
+
 
 sub debug {
     my ($self, $info) = @_;

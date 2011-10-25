@@ -6,6 +6,7 @@ use Carp();
 use YAML;
 
 use Ormish::Engine::DBI;
+use Ormish::Query;
 
 has 'engine'        => (is => 'rw', isa => 'Ormish::Engine::BaseRole', );
 has 'debug_log'     => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
@@ -48,6 +49,25 @@ sub idmap_add {
     weaken $ident_of{refaddr($self)}{$obj_class}{$obj_oid};
 }
 
+sub get_object_from_hashref {
+    my ($self, $mapping, $h) = @_;
+    my $oid_str     = $mapping->oid->as_str($h);
+    my $obj_class   = $mapping->for_class;
+    if (exists($ident_of{refaddr($self)}{$obj_class}{$oid_str})) {
+        # return cached copy from identity map
+        return $ident_of{refaddr($self)}{$obj_class}{$oid_str};
+    }
+    my $o = $mapping->for_class->new( %$h );
+    # bind obj to datastore 
+    my $obj_addr = refaddr($o);
+    $store_of{$obj_addr} = $self;
+    weaken $store_of{$obj_addr};
+    # add to identity map
+    $self->idmap_add($o);
+    return $o;
+}
+
+
 sub add {
     my ($self, $obj) = @_;
     # check class if mapped; 
@@ -61,13 +81,18 @@ sub add {
         (refaddr($store_of{$obj_addr}) eq refaddr($self))
             or Carp::croak("Cannot add object managed by another ".ref($self)." instance");
     }
-    $store_of{$obj_addr} = $self;
-    weaken $store_of{$obj_addr};
 
     my $obj_oid = $mapping->oid->as_str( $obj );
     if (not defined $obj_oid) {
         # not yet in identity map
-        push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ ] ];
+        # ---
+        # bind obj to datastore 
+        $store_of{$obj_addr} = $self;
+        weaken $store_of{$obj_addr};
+        my $undo_insert = sub {
+            delete $store_of{$obj_addr};
+        };
+        push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
     }
     # TODO: traverse attributes and relationships ...
 }
@@ -104,6 +129,14 @@ sub rollback {
     }
 }
 
+sub query {
+    my ($self, @result_types) = @_;
+    return Ormish::Query->new( 
+        result_types    => \@result_types, 
+        datastore       => $self,
+    );
+}
+
 
 # --- helper routines
 
@@ -134,6 +167,7 @@ sub register_mapping {
         $self->_add_to_mappings( $opts );
     }
 }
+
 
 sub _add_to_mappings {
     my ($self, $m) = @_;
@@ -176,7 +210,7 @@ sub _add_to_mappings {
         }
         # install dirty detectors, 
         #       i.e. detect if the object was modified via writers/accessor, then mark as dirty
-        my $get_on_modify_mark_dirty = sub {
+        my $hook__on_modify_mark_dirty = sub {
             my ($mod_attr) = @_;
             return sub {
                 my $o = shift @_;
@@ -197,7 +231,7 @@ sub _add_to_mappings {
         foreach my $attr ($metaclass->get_all_attributes) {
             my $writer_name = $attr->writer || $attr->accessor;
             next if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
-            $metaclass->add_before_method_modifier( $writer_name, $get_on_modify_mark_dirty->($attr) );
+            $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty->($attr) );
         }
 
         $classes_with_hooks{$class} = 1;
