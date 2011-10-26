@@ -74,6 +74,19 @@ sub col_to_attr {
 }
 
 
+sub new_object_from_hashref {
+    my ($self, $h) = @_;
+    my $obj_class   = $self->for_class;
+    my $c2a         = $self->col_to_attr(1);
+    my %oh          = map { 
+        $c2a->{$_} => $h->{$_} 
+    } keys %$h;
+    my $tmp_o       = bless \%oh, $obj_class;
+    return $tmp_o;
+}
+
+
+
 1;
 
 __END__

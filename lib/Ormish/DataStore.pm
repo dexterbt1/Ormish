@@ -40,9 +40,8 @@ sub clean_dirty_obj {
 }
 
 sub idmap_add {
-    my ($self, $obj) = @_;
-    my $obj_class = ref($obj) || '';
-    my $mapping = $self->mapping_of_class($obj_class);
+    my ($self, $mapping, $obj) = @_;
+    my $obj_class = $mapping->for_class;
     my $obj_oid = $mapping->oid->as_str( $obj );
     (defined $obj_oid)
         or Carp::confess("Cannot manage object without identity yet");
@@ -51,26 +50,28 @@ sub idmap_add {
     weaken $ident_of{refaddr($self)}{$obj_class}{$obj_oid};
 }
 
-sub get_object_from_hashref {
-    my ($self, $mapping, $h) = @_;
-    my $oid_str     = $mapping->oid->as_str($h);
-    my $obj_class   = $mapping->for_class;
-    if (exists($ident_of{refaddr($self)}{$obj_class}{$oid_str})) {
+sub idmap_get {
+    my ($self, $mapping, $oid_str) = @_;
+    my $class = $mapping->for_class;
+    if (exists($ident_of{refaddr($self)}{$class}{$oid_str})) {
         # return cached copy from identity map
-        return $ident_of{refaddr($self)}{$obj_class}{$oid_str};
+        return $ident_of{refaddr($self)}{$class}{$oid_str};
     }
-    my $c2a = $mapping->col_to_attr(1);
-    my %oh = map { $c2a->{$_} => $h->{$_} } keys %$h;
-    my $o = $mapping->for_class->new( %oh );
-    # bind obj to datastore 
-    my $obj_addr = refaddr($o);
-    $store_of{$obj_addr} = $self;
-    weaken $store_of{$obj_addr};
-    # add to identity map
-    $self->idmap_add($o);
-    return $o;
 }
 
+sub bind_object { # --- Function
+    my ($obj, $datastore) = @_;
+    # bind obj to datastore 
+    my $obj_addr = refaddr($obj);
+    $store_of{$obj_addr} = $datastore;
+    weaken $store_of{$obj_addr};
+}
+
+sub unbind_object { # --- Function
+    my ($obj) = @_;
+    my $obj_addr = refaddr($obj);
+    delete $store_of{$obj_addr};
+}
 
 sub add {
     my ($self, $obj) = @_;
@@ -88,13 +89,9 @@ sub add {
 
     my $obj_oid = $mapping->oid->as_str( $obj );
     if (not defined $obj_oid) {
-        # not yet in identity map
-        # ---
-        # bind obj to datastore 
-        $store_of{$obj_addr} = $self;
-        weaken $store_of{$obj_addr};
+        bind_object( $obj, $self );
         my $undo_insert = sub {
-            delete $store_of{$obj_addr};
+            unbind_object( $obj );
         };
         push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
     }
@@ -201,7 +198,7 @@ sub _add_to_mappings {
                     delete $ident_of{refaddr($st)}{$class}{$obj_oid};
                 }
                 # delete store mapping
-                delete $store_of{refaddr($o)};
+                unbind_object($o);
                 delete $is_dirty{refaddr($st)}{refaddr($o)};
             }
         };

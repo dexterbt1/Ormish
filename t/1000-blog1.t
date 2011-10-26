@@ -5,6 +5,7 @@
     has 'name'          => (is => 'rw', isa => 'Str', required => 1);
     has 'title'         => (is => 'rw', isa => 'Str');
     has 'tagline'       => (is => 'rw', isa => 'Str');
+    #has 'posts'         => (is => 'rw', isa => 'Set::Object');
     
     use Ormish;
     sub _ORMISH_MAPPING {
@@ -17,6 +18,8 @@
                 title 
                 tagline|c_tag_line
             /],
+            relations       => [
+            ],
         );
     }
     1;

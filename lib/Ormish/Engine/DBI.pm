@@ -4,6 +4,7 @@ use Scalar::Util qw/blessed/;
 use SQL::Abstract::More;
 use DBIx::Simple;
 use Ormish::Engine::BaseRole;
+use Ormish::DataStore;
 
 with 'Ormish::Engine::BaseRole';
 
@@ -40,8 +41,7 @@ sub insert_object {
             $self->debug([ $stmt, \@bind ]);
         } @{$table_rows->{$table}};
     }
-    $datastore->idmap_add($obj);
-
+    $datastore->idmap_add($mapping, $obj);
     # FIXME: how do we handle multi-table inheritance
     # FIXME: how do we handle natural keys
     # FIXME: how do we handle composite keys
@@ -109,7 +109,16 @@ sub get_object_by_oid {
         $self->debug([ $stmt, \@bind ]);
         my $h = $r->hash;
         return if (not defined $h);
-        return $datastore->get_object_from_hashref($mapping, $h);
+        # TODO
+        my $tmp_o = $mapping->new_object_from_hashref($h);
+        my $oid_str = $mapping->oid->as_str($tmp_o);
+        my $o = $datastore->idmap_get($mapping, $oid_str);
+        if ($o) {
+            return $o;
+        }
+        Ormish::DataStore::bind_object($tmp_o, $datastore);
+        $datastore->idmap_add($mapping, $tmp_o);
+        return $tmp_o;
     }
 }
 
@@ -198,11 +207,15 @@ with 'Ormish::Query::ResultRole';
 
 has 'dbixs_result'      => (is => 'rw', isa => 'DBIx::Simple::Result', required => 1);
 has '_cache_result_ct'  => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
+has '_cache_mapping'    => (is => 'rw', isa => 'HashRef', default => sub { { } });
 
 sub BUILD {
     my ($self) = @_;
     my @result_class_tables = $self->query->meta_result_class_tables;
     $self->_cache_result_ct( \@result_class_tables );
+    # for now, build only 1 class 
+    my ($class, $table) = @{$self->_cache_result_ct};
+    $self->_cache_mapping->{$class} = $self->datastore->mapping_of_class($class);
 }
 
 sub _next_row {
@@ -216,8 +229,17 @@ sub next {
     return if (not $row);
     # for now, build only 1 class 
     my ($class, $table) = @{$self->_cache_result_ct};
-    my $mapping = $self->datastore->mapping_of_class($class);
-    return $self->datastore->get_object_from_hashref($mapping, $row);
+    my $mapping = $self->_cache_mapping->{$class};
+    my $datastore = $self->datastore;
+    my $tmp_o = $mapping->new_object_from_hashref($row);
+    my $oid_str = $mapping->oid->as_str($tmp_o);
+    my $o = $datastore->idmap_get($mapping, $oid_str);
+    if ($o) {
+        return $o;
+    }
+    Ormish::DataStore::bind_object($tmp_o, $datastore);
+    $datastore->idmap_set($mapping, $tmp_o);
+    return $tmp_o;
 }
 
 sub list {
