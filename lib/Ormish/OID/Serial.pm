@@ -4,9 +4,8 @@ use Scalar::Util qw/blessed/;
 use Ormish::OID::BaseRole;
 with 'Ormish::OID::BaseRole';
 
-has 'column'    => (is => 'rw', isa => 'Str', required => 1);
-has 'attr'      => (is => 'rw', isa => 'Str', lazy => 1, default => 'id');
-
+has 'column'        => (is => 'rw', isa => 'Str', required => 1);
+has 'attr'          => (is => 'rw', isa => 'Str', lazy => 1, default => 'id');
 
 sub as_str {
     my ($self, $target) = @_;

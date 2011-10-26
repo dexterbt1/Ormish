@@ -1,7 +1,7 @@
 {
     package My::Blog;
     use Moose;
-    has 'id'            => (is => 'rw', isa => 'Any'); # needed to contain the object identity
+    has 'id'            => (is => 'rw', isa => 'Any'); # needed as the object identity
     has 'name'          => (is => 'rw', isa => 'Str', required => 1);
     has 'title'         => (is => 'rw', isa => 'Str');
     has 'tagline'       => (is => 'rw', isa => 'Str');
@@ -12,18 +12,24 @@
         return Ormish::Mapping->new( 
             for_class       => __PACKAGE__,
             table           => 'blog_blog',
-            oid             => Ormish::OID::Serial->new( column => 'id', attr => 'id' ),
+            oid             => Ormish::OID::Serial->new( column => 'b_id', attr => 'id' ),
             attributes      => [qw/
                 name 
-                title 
+                title
                 tagline|c_tag_line
             /],
-            relations       => [
-            ],
+            #relations       => [
+            #    Ormish::Relation::OneToMany->new( attr => 'posts', to_class => 'My::Post' );
+            #],
         );
     }
     1;
 }
+#{
+#    package My::Post;
+#    use Moose;
+#    use id              => (is => 'rw', isa => 
+#}
 
 package main;
 use strict;
@@ -34,7 +40,7 @@ use DBIx::Simple;
 use Ormish;
 
 my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
-$dbh->do('CREATE TABLE blog_blog (id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, c_tag_line VARCHAR)');
+$dbh->do('CREATE TABLE blog_blog (b_id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, c_tag_line VARCHAR)');
 $dbh->commit;
 
 my @sql = ();
@@ -88,7 +94,7 @@ my $ds = Ormish::DataStore->new(
     is scalar(@sql), 2; # insert + select
     is Ormish::DataStore::of($b1), $ds;
 
-    DBIx::Simple->new($dbh)->query(q{INSERT INTO blog_blog (id,name,title,c_tag_line) VALUES (??)},
+    DBIx::Simple->new($dbh)->query(q{INSERT INTO blog_blog (b_id,name,title,c_tag_line) VALUES (??)},
         123, 'some-random-blog', 'Some Random Blog', '... nothing here, move along',
         );
 
@@ -132,10 +138,10 @@ my $ds = Ormish::DataStore->new(
     @all = $result->list;
     is scalar(@all), 2;
 
-    # limit
-    #$result = $ds->query('My::Blog')->where('{id} > ?', 0)->limit(1)->select;
-    #@all = $result->list;
-    #is scalar(@all), 1;
+    # aliases
+    $result = $ds->query('My::Blog|b')->where('{b.id} > ?', 0)->select;
+    @all = $result->list;
+    is scalar(@all), 3;
 
     
 }

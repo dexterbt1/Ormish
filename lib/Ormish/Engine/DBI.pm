@@ -18,7 +18,7 @@ has 'dbh'           => (is          => 'ro',
                         );
 has 'dbixs'         => (is => 'rw', isa => 'DBIx::Simple', lazy => 1, default => sub { DBIx::Simple->new($_[0]->dbh) });
 has 'log_sql'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
-has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new });
+has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new(case => 'lower') });
 
 sub insert_object {
     my ($self, $datastore, $obj) = @_;
@@ -125,16 +125,24 @@ sub get_object_by_oid {
 
 sub do_select {
     my ($self, $datastore, $query) = @_;
-    my @class_tables = $query->meta_result_class_tables;
-    my %c2t = @class_tables;
-    (scalar(keys %c2t) == 1)
-        or Carp::confess("unsupported number of result_types, try 1 for now");
+
+    my @cta = $query->meta_result_class_table_alias;
+    my $qkv = $query->meta_result_qkv;
     
     # TODO: add joins later
     # TODO: add multi-table mapping of a class
     {
-        my ($class, $table) = (shift @class_tables, shift @class_tables);
+        my ($class, $table, $alias) = (shift @cta, shift @cta, shift @cta);
+        my $m = $datastore->mapping_of_class($class);
+
+        # build query
+        # ---
+        
         my $from_spec = [ '{'.$class.'}' ];
+        if ($alias) {
+            $from_spec = [ "{$class} as {$alias}" ];
+        }
+        
         my ($sql_sel, @sql_sel_bind) = $self->sql_abstract->select( -from => $from_spec );
 
         my $where_spec = $query->meta_filter_condition;
@@ -153,29 +161,13 @@ sub do_select {
 
         # auto string-substition
         # ---
-        my %tokv = ();
-        my %aliases = %c2t;
 
-        # tokenize
-        my %tmptoks = map { $_ => 1 } ($stmt =~ /\{(.*?)\}/g);
-        my %tokclasses = ();
-        # TODO: identify and split aliases
-        foreach my $tok (keys %tmptoks) {
-            next if (exists $tokv{$tok});
-            if ($tok->can('meta') and $tok->meta->isa('Moose::Meta::Class')) {
-                my $m = $datastore->mapping_of_class($tok);
-                $tokv{$tok} = $m->table;
-                $tokclasses{$tok} = 1;
-                # oid 
-                my @oid_cols = $m->oid->get_column_names;
-                %tokv = (%tokv, %{$m->oid->attr_to_col});
-                # regular attributes
-                %tokv = (%tokv, %{$m->attr_to_col});
-            }
-        }
-        foreach my $tok (keys %tokv) {
-            my $v = $tokv{$tok};
-            my $pat = '{'.$tok.'}';
+        # substitute placeholders
+        my @placeholders = map { $_ => 1 } ($stmt =~ /\{(.*?)\}/g);
+        foreach my $ph (@placeholders) {
+            next if (not exists $qkv->{$ph});
+            my $v = $qkv->{$ph};
+            my $pat = '{'.$ph.'}';
             $stmt =~ s[$pat][$v]g;
         }
 
@@ -206,15 +198,15 @@ use Carp ();
 with 'Ormish::Query::ResultRole';
 
 has 'dbixs_result'      => (is => 'rw', isa => 'DBIx::Simple::Result', required => 1);
-has '_cache_result_ct'  => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
+has '_cache_result_cta' => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
 has '_cache_mapping'    => (is => 'rw', isa => 'HashRef', default => sub { { } });
 
 sub BUILD {
     my ($self) = @_;
-    my @result_class_tables = $self->query->meta_result_class_tables;
-    $self->_cache_result_ct( \@result_class_tables );
+    my @result_cta = $self->query->meta_result_class_table_alias;
+    $self->_cache_result_cta( \@result_cta );
     # for now, build only 1 class 
-    my ($class, $table) = @{$self->_cache_result_ct};
+    my ($class, $table, $alias) = @{$self->_cache_result_cta};
     $self->_cache_mapping->{$class} = $self->datastore->mapping_of_class($class);
 }
 
@@ -228,7 +220,7 @@ sub next {
     my $row = $self->_next_row();
     return if (not $row);
     # for now, build only 1 class 
-    my ($class, $table) = @{$self->_cache_result_ct};
+    my ($class, $table, $alias) = @{$self->_cache_result_cta};
     my $mapping = $self->_cache_mapping->{$class};
     my $datastore = $self->datastore;
     my $tmp_o = $mapping->new_object_from_hashref($row);

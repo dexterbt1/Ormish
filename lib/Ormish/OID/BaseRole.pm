@@ -10,11 +10,8 @@ requires 'set_object_identity';
 requires 'is_db_generated';
 
 requires 'col_to_values';
-
 requires 'attr_to_col';
 requires 'col_to_attr';
-
-requires 'get_column_names';
 
 
 1;
