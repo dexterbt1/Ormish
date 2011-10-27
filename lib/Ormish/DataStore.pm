@@ -219,13 +219,14 @@ sub _add_to_mappings {
                 if (scalar @_ > 0) {
                     my $st = Ormish::DataStore::of($o); 
                     if ($st) {
-                        # mark as dirty
+                        # mark as dirty, save the original oid value
                         $is_dirty{refaddr($st)}{refaddr($o)} = 1;
-                        my $old_value = $mod_attr->get_value($o);
+                        my $oids_before_update = $m->oid->attr_values($o);
+                        my $prev_value = $mod_attr->get_value($o);
                         my $undo_attr_set = sub { 
-                            $mod_attr->set_raw_value($o, $old_value); 
+                            $mod_attr->set_raw_value($o, $prev_value); 
                         };
-                        push @{$st->_work_queue}, [ [ 'update_object', $self, $o, ], [ $undo_attr_set ] ];
+                        push @{$st->_work_queue}, [ [ 'update_object', $self, $o, $oids_before_update ], [ $undo_attr_set ] ];
                     }
                 }
             };
@@ -246,6 +247,7 @@ sub DEMOLISH {
     delete $ident_of{refaddr($self)}; # clear identity map
 }
 
+__PACKAGE__->meta->make_immutable;
 
 1;
 

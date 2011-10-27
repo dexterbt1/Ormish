@@ -20,6 +20,12 @@ has 'dbixs'         => (is => 'rw', isa => 'DBIx::Simple', lazy => 1, default =>
 has 'log_sql'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
 has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new(case => 'lower') });
 
+
+# TODO: how do we handle multi-table inheritance
+# FIXME: how do we handle natural keys
+# FIXME: how do we handle composite keys
+
+
 sub insert_object {
     my ($self, $datastore, $obj) = @_;
 
@@ -27,7 +33,7 @@ sub insert_object {
 
     my $class = ref($obj) || '';
     my $mapping = $datastore->mapping_of_class($class);
-    my $table_rows = $mapping->table_rows_of($obj);
+    my $table_rows = $mapping->object_insert_table_rows($obj);
     foreach my $table (keys %$table_rows) {
         map {
             my ($row, $where) = @$_;
@@ -42,9 +48,6 @@ sub insert_object {
         } @{$table_rows->{$table}};
     }
     $datastore->idmap_add($mapping, $obj);
-    # FIXME: how do we handle multi-table inheritance
-    # FIXME: how do we handle natural keys
-    # FIXME: how do we handle composite keys
 }
 
 sub insert_object_undo {
@@ -54,7 +57,7 @@ sub insert_object_undo {
 # ---
 
 sub update_object {
-    my ($self, $datastore, $obj) = @_;
+    my ($self, $datastore, $obj, $oid_attr_values) = @_;
     if (not $datastore->obj_is_dirty($obj)) {
         # skip clean
         return;
@@ -64,7 +67,7 @@ sub update_object {
 
     my $class = ref($obj) || '';
     my $mapping = $datastore->mapping_of_class($class);
-    my $table_rows = $mapping->table_rows_of($obj, 1);
+    my $table_rows = $mapping->object_update_table_rows($obj, $oid_attr_values);
     foreach my $table (keys %$table_rows) {
         map {
             my ($row, $where) = @$_;
@@ -95,9 +98,10 @@ sub rollback {
 
 sub get_object_by_oid {
     my ($self, $datastore, $class, $oid) = @_;
+    # TODO: support composite oids
     my $db = $self->dbixs;
     my $mapping = $datastore->mapping_of_class($class);
-    my @oid_cols = $mapping->oid->get_column_names;
+    my @oid_cols = keys %{$mapping->oid_col_to_attr};
     if (scalar(@oid_cols) == 1) {
         my ($oid_col) = @oid_cols;
         my ($stmt, @bind) = $self->sql_abstract->select( 
@@ -149,7 +153,7 @@ sub do_select {
         my ($sql_where, @sql_where_bind) = ('', );
         if ($where_spec) {
             ($sql_where, @sql_where_bind) = @$where_spec;
-            $sql_where = 'WHERE '.$sql_where;
+            $sql_where = 'where '.$sql_where;
         }
 
         my $stmt = join(' ',
@@ -243,6 +247,7 @@ sub list {
     return @out;
 }
 
+__PACKAGE__->meta->make_immutable;
 
 1;
 

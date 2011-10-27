@@ -48,12 +48,14 @@ sub meta_result_qkv {
             }
             my $alias_or_class = $alias || $class;
             my $alias_or_table = $alias || $table;
-            # oid 
-            my $oid_attr_to_col = $m->oid->attr_to_col;
-            foreach my $oid_attr (keys %$oid_attr_to_col) {
-                $qkv{$oid_attr} = $oid_attr_to_col->{$oid_attr};    
-                $qkv{$alias_or_class.'.'.$oid_attr} = $alias_or_table.'.'.$oid_attr_to_col->{$oid_attr};    
-            }
+
+            ## oid 
+            #my $oid_attr_to_col = $m->oid->attr_to_col;
+            #foreach my $oid_attr (keys %$oid_attr_to_col) {
+            #    $qkv{$oid_attr} = $oid_attr_to_col->{$oid_attr};    
+            #    $qkv{$alias_or_class.'.'.$oid_attr} = $alias_or_table.'.'.$oid_attr_to_col->{$oid_attr};    
+            #}
+
             # regular attributes
             my $class_attr_to_col = $m->attr_to_col;
             foreach my $c_attr (keys %$class_attr_to_col) {
@@ -96,6 +98,7 @@ sub where {
 }
 
 
+__PACKAGE__->meta->make_immutable;
 
 1;
 

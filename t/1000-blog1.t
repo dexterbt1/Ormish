@@ -12,12 +12,13 @@
         return Ormish::Mapping->new( 
             for_class       => __PACKAGE__,
             table           => 'blog_blog',
-            oid             => Ormish::OID::Serial->new( column => 'b_id', attr => 'id' ),
             attributes      => [qw/
+                id|b_id
                 name 
                 title
                 tagline|c_tag_line
             /],
+            oid             => Ormish::OID::Serial->new( attribute => 'id' ),
             #relations       => [
             #    Ormish::Relation::OneToMany->new( attr => 'posts', to_class => 'My::Post' );
             #],
@@ -94,6 +95,21 @@ my $ds = Ormish::DataStore->new(
     is scalar(@sql), 2; # insert + select
     is Ormish::DataStore::of($b1), $ds;
 
+    # update and flush, 
+    $b1->title($b1->title);
+    $ds->commit;
+    {
+        # make sure that single object updates affects only the oids concerned
+        my $bx = $ds->query("My::Blog")->get($b1->id);
+        is $bx, $b1;
+        is $b1, $blog;
+        isnt $b1, $blog2;
+        isnt $b1->title, $blog2->title;
+        # and be paranoid, check the db that indeed only 
+        my @affected = DBIx::Simple->new($dbh)->query("SELECT * FROM blog_blog WHERE title=?", $b1->title)->arrays();
+        is scalar(@affected), 1;
+    }
+
     DBIx::Simple->new($dbh)->query(q{INSERT INTO blog_blog (b_id,name,title,c_tag_line) VALUES (??)},
         123, 'some-random-blog', 'Some Random Blog', '... nothing here, move along',
         );
@@ -105,11 +121,11 @@ my $ds = Ormish::DataStore->new(
     is $b2->name, 'some-random-blog';
     is $b2->title, 'Some Random Blog';
     is $b2->tagline, '... nothing here, move along';
-    is scalar(@sql), 3;
+    is scalar(@sql), 5;
 
     $ds->add($b2);
     $ds->commit;
-    is scalar(@sql), 3;
+    is scalar(@sql), 5; # no effect, no queries issued
 
     # --- query result
 
