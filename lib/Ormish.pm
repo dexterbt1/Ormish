@@ -8,6 +8,7 @@ our $VERSION = '0.1000';
 use Ormish::DataStore;
 use Ormish::Mapping;
 use Ormish::OID::Serial;
+use Ormish::OID::Natural;
 
 1; # End of Ormish
 

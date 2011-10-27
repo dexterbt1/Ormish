@@ -95,6 +95,17 @@ sub add {
         };
         push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
     }
+    elsif (not $mapping->oid->is_db_generated) {
+        my $idmapped = $self->idmap_get($mapping, $obj);
+        if (not $idmapped) {
+            bind_object( $obj, $self );
+            my $undo_insert = sub {
+                unbind_object( $obj );
+            };
+            push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
+        }
+    }
+    
     # TODO: traverse attributes and relationships ...
 }
 
