@@ -7,7 +7,7 @@
     has 'name'          => (is => 'rw', isa => 'Str', required => 1);
     has 'title'         => (is => 'rw', isa => 'Str');
     has 'tagline'       => (is => 'rw', isa => 'Str');
-    #has 'posts'         => (is => 'rw', isa => 'Set::Object');
+    has 'posts'         => (is => 'rw', isa => 'Set::Object');
     
     sub _ORMISH_MAPPING {
         return Ormish::Mapping->new(  # this assumes you'll be using Ormish later, without "use"ing it right now
@@ -161,6 +161,29 @@ my $ds = Ormish::DataStore->new(
     $result = $ds->query('My::Blog|b')->where('{b.id} > ?', 0)->select;
     @all = $result->list;
     is scalar(@all), 3;
+
+
+    # ...
+
+    # bulk update
+    is Ormish::DataStore::of($b2), $ds;
+    my $affected = 0;
+    {
+        ok 1;
+        ## try to bulk update, ... this will actually touch $b2
+        #$affected = $ds->query('My::Blog')->where('{id} > ?', 100)->update({ title => uc($b2->title) });
+        #is $affected, 1;
+        #is $b2->title, 'SOME RANDOM BLOG';
+        #$ds->rollback;
+        #is $b2->title, 'Some Random Blog';
+
+        ## query-language expression in the values, plus alias support
+        #$affected = $ds->query('My::Blog|b')->where('{b.id} > ?', 100)->update('{b.title} = upper({b.title})');
+        #is $affected, 1;
+        #is $b2->title, 'SOME RANDOM BLOG';
+        
+    }
+        
 
     
 }

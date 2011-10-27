@@ -7,12 +7,27 @@ use Carp ();
 use Ormish::Query::Result;
 
 has 'datastore'         => (is => 'ro', isa => 'Ormish::DataStore', required => 1);
-has 'result_types'      => (is => 'rw', isa => 'ArrayRef[Str]');
+has 'result_types'      => (is => 'rw', isa => 'ArrayRef[Str]', trigger => sub { $_[0]->_build_meta_result });
+
+has '_meta_result_qkv'  => (is => 'rw', isa => 'HashRef');
+has '_meta_result_cta'  => (is => 'rw', isa => 'ArrayRef');
 has '_filter_cond'      => (is => 'rw', isa => 'ArrayRef');
 
 
-sub meta_result_class_table_alias {
+sub meta_result_cta {
     my ($self) = @_;
+    return $self->_meta_result_cta;
+}
+
+sub meta_result_qkv {
+    my ($self) = @_;
+    return $self->_meta_result_qkv;
+}
+
+
+sub _build_meta_result {
+    my ($self) = @_;
+
     my @cta = ();
     foreach my $rt (@{$self->result_types}) {
         my $m;
@@ -32,15 +47,13 @@ sub meta_result_class_table_alias {
             push @cta, $class, $table, $alias;
         }
     }
-    return @cta;
-}
+    $self->_meta_result_cta( \@cta );
 
+    # ---
 
-sub meta_result_qkv {
-    my ($self) = @_;
     my %qkv = ();
     {
-        my @tmp_cta = $self->meta_result_class_table_alias;
+        my @tmp_cta = @cta;
         while (scalar(@tmp_cta)>=3) {
             my ($class, $table, $alias) = splice(@tmp_cta, 0, 3);
             my $m = $self->datastore->mapping_of_class($class);
@@ -66,7 +79,7 @@ sub meta_result_qkv {
             }
         }
     }
-    return \%qkv;
+    $self->_meta_result_qkv(\%qkv);
 }
 
 

@@ -20,6 +20,7 @@ has 'dbh'           => (is          => 'ro',
                                     },
                         );
 has 'dbixs'         => (is => 'rw', isa => 'DBIx::Simple', lazy => 1, default => sub { DBIx::Simple->new($_[0]->dbh) });
+
 has 'log_sql'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
 has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new(case => 'lower') });
 
@@ -54,7 +55,7 @@ sub insert_object {
 }
 
 sub insert_object_undo {
-    # TODO:
+    # nop
 }
 
 # ---
@@ -83,9 +84,8 @@ sub update_object {
 }
 
 sub update_object_undo {
-    my ($self, $datastore, $obj) = @_;
+    # nop
 }
-
 
 
 sub commit {
@@ -133,7 +133,7 @@ sub get_object_by_oid {
 sub do_select {
     my ($self, $datastore, $query) = @_;
 
-    my @cta = $query->meta_result_class_table_alias;
+    my @cta = @{$query->meta_result_cta};
     my $qkv = $query->meta_result_qkv;
     
     # TODO: add joins later
@@ -142,12 +142,30 @@ sub do_select {
         my ($class, $table, $alias) = (shift @cta, shift @cta, shift @cta);
         my $m = $datastore->mapping_of_class($class);
 
+        # for substituting query key-value placeholders
+        # ---
+        my $subst_qkv = sub { # args(\%qkv, $subj)
+            my @placeholders = ($_[1] =~ /\{(.*?)\}/g);
+            foreach my $ph (@placeholders) {
+                next if (not exists $_[0]->{$ph});
+                my $v = $_[0]->{$ph};
+                my $pat = '{'.$ph.'}';
+                $_[1] =~ s[$pat][$v]g;
+            }
+            return $_[1];
+        };
+
         # build query
         # ---
         
-        my $from_spec = [ '{'.$class.'}' ];
-        if ($alias) {
-            $from_spec = [ "{$class} as {$alias}" ];
+        my $from_spec;
+        {
+            # support single table for now
+            my @tmp_from_spec = ( "{$class}" );
+            if ($alias) {
+                @tmp_from_spec = ( "{$class} as {$alias}" );
+            }
+            $from_spec = [ map { $subst_qkv->($qkv, $_) } @tmp_from_spec ];
         }
         
         my ($sql_sel, @sql_sel_bind) = $self->sql_abstract->select( -from => $from_spec );
@@ -159,24 +177,15 @@ sub do_select {
             $sql_where = 'where '.$sql_where;
         }
 
-        my $stmt = join(' ',
-            $sql_sel,
-            $sql_where,
-            # ...
-            # ... more here later TODO
+        my $stmt = $subst_qkv->(
+            $qkv, 
+            join(' ',
+                $sql_sel,
+                $sql_where,
+                # ...
+                # ... more here later TODO
+            ),
         );
-
-        # auto string-substition
-        # ---
-
-        # substitute placeholders
-        my @placeholders = map { $_ => 1 } ($stmt =~ /\{(.*?)\}/g);
-        foreach my $ph (@placeholders) {
-            next if (not exists $qkv->{$ph});
-            my $v = $qkv->{$ph};
-            my $pat = '{'.$ph.'}';
-            $stmt =~ s[$pat][$v]g;
-        }
 
         my @bind = (@sql_sel_bind, @sql_where_bind);
 
@@ -212,7 +221,7 @@ has '_cache_mapping'    => (is => 'rw', isa => 'HashRef', default => sub { { } }
 
 sub BUILD {
     my ($self) = @_;
-    my @result_cta = $self->query->meta_result_class_table_alias;
+    my @result_cta = @{$self->query->meta_result_cta};
     $self->_cache_result_cta( \@result_cta );
     # for now, build only 1 class 
     my ($class, $table, $alias) = @{$self->_cache_result_cta};
