@@ -79,6 +79,11 @@ my $ds = Ormish::DataStore->new(
     $ds->rollback;
     is scalar(@sql), 0;
     is $p->ssn, '111-222-1234';
+
+    # delete
+    #@sql = ();
+    #$ds->delete($p);
+    #is scalar(@sql), 0;
     
 }
 

@@ -4,8 +4,6 @@ use namespace::autoclean;
 
 use Carp ();
 
-use Ormish::Query::Result;
-
 has 'datastore'         => (is => 'ro', isa => 'Ormish::DataStore', required => 1);
 has 'result_types'      => (is => 'rw', isa => 'ArrayRef[Str]', trigger => sub { $_[0]->_build_meta_result });
 

@@ -239,6 +239,8 @@ use Moose;
 use namespace::autoclean;
 
 use Carp ();
+use Ormish::Query::ResultRole;
+
 with 'Ormish::Query::ResultRole';
 
 has 'dbixs_result'      => (is => 'rw', isa => 'DBIx::Simple::Result', required => 1);
