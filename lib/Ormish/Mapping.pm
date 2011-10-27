@@ -32,11 +32,16 @@ sub _setup_attrs {
     my %oid_attrs = map { $_ => 1 } $self->oid->get_attributes;
     my %oid_c2a  = ();
     my %oid_a2c  = ();
+    my $class = $self->for_class;
     foreach my $at (@$attr_name_or_aliases) {
         my ($meth, $col) = split /\|/, $at, 2;
         if (not $col) {
             $col = $meth;
         }
+
+        $class->meta->has_attribute($meth)
+            or Carp::confess("Undeclared attribute '$meth' in class '$class'");
+
         push @attributes, $meth;
         $a2c{$meth} = $col;
         $c2a{$col}  = $meth;
@@ -45,6 +50,11 @@ sub _setup_attrs {
             $oid_a2c{$meth} = $col;
         }
     }
+    map {
+        $class->meta->has_attribute($_)
+            or Carp::confess("Undeclared attribute '$_' in class '$class'");
+    } keys %oid_attrs;
+
     $self->_attr2col( \%a2c );
     $self->_col2attr( \%c2a );
     $self->_oid_attr2col( \%oid_a2c );

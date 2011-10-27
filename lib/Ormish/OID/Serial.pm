@@ -7,7 +7,7 @@ use Scalar::Util qw/blessed/;
 use Ormish::OID::BaseRole;
 with 'Ormish::OID::BaseRole';
 
-has 'attribute' => (is => 'ro', isa => 'Str', required => 1);
+has 'attribute'     => (is => 'ro', isa => 'Str', required => 1);
 
 sub as_str {
     my ($self, $obj) = @_;
