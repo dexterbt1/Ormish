@@ -1,15 +1,16 @@
 {
     package My::Blog;
     use Moose;
+    use namespace::autoclean;
+
     has 'id'            => (is => 'rw', isa => 'Any'); # needed as the object identity
     has 'name'          => (is => 'rw', isa => 'Str', required => 1);
     has 'title'         => (is => 'rw', isa => 'Str');
     has 'tagline'       => (is => 'rw', isa => 'Str');
     #has 'posts'         => (is => 'rw', isa => 'Set::Object');
     
-    use Ormish;
     sub _ORMISH_MAPPING {
-        return Ormish::Mapping->new( 
+        return Ormish::Mapping->new(  # this assumes you'll be using Ormish later, without "use"ing it right now
             for_class       => __PACKAGE__,
             table           => 'blog_blog',
             attributes      => [qw/
@@ -25,6 +26,8 @@
         );
     }
     1;
+
+    __PACKAGE__->meta->make_immutable;
 }
 #{
 #    package My::Post;

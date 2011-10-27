@@ -1,6 +1,8 @@
 package Ormish::Mapping;
 use Moose;
 use Moose::Util::TypeConstraints;
+use namespace::autoclean;
+
 use Carp ();
 
 has 'table'         => (is => 'rw', isa => 'Str', required => 1);

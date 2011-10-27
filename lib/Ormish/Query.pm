@@ -1,5 +1,7 @@
 package Ormish::Query;
 use Moose;
+use namespace::autoclean;
+
 use Carp ();
 
 use Ormish::Query::Result;

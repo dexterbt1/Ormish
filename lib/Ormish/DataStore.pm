@@ -1,6 +1,8 @@
 package Ormish::DataStore;
 use strict;
 use Moose;
+use namespace::autoclean;
+
 use Scalar::Util qw/refaddr weaken/;
 use Carp();
 use YAML;
@@ -214,6 +216,10 @@ sub _add_to_mappings {
             }
         };
         my $metaclass = $class->meta;
+        my $meta_was_immutable = $metaclass->is_immutable;
+        if ($meta_was_immutable) {
+            $metaclass->make_mutable;
+        }
         if ($metaclass->has_method('DEMOLISH')) {
             $metaclass->add_before_method_modifier('DEMOLISH', $on_demolish_hook);
         }
@@ -232,7 +238,8 @@ sub _add_to_mappings {
                     if ($st) {
                         # mark as dirty, save the original oid value
                         $is_dirty{refaddr($st)}{refaddr($o)} = 1;
-                        my $oids_before_update = $m->oid->attr_values($o);
+                        my $obj_m = $st->mapping_of_class($class);
+                        my $oids_before_update = $obj_m->oid->attr_values($o);
                         my $prev_value = $mod_attr->get_value($o);
                         my $undo_attr_set = sub { 
                             $mod_attr->set_raw_value($o, $prev_value); 
@@ -249,6 +256,10 @@ sub _add_to_mappings {
         }
 
         $classes_with_hooks{$class} = 1;
+
+        if ($meta_was_immutable) {
+            $metaclass->make_immutable;
+        }
     }
 }
 

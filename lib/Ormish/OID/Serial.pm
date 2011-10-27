@@ -1,6 +1,9 @@
 package Ormish::OID::Serial;
 use Moose;
+use namespace::autoclean;
+
 use Scalar::Util qw/blessed/;
+
 use Ormish::OID::BaseRole;
 with 'Ormish::OID::BaseRole';
 

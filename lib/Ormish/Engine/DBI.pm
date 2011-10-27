@@ -1,8 +1,11 @@
 package Ormish::Engine::DBI;
 use Moose;
+use namespace::autoclean;
+
 use Scalar::Util qw/blessed/;
 use SQL::Abstract::More;
 use DBIx::Simple;
+
 use Ormish::Engine::BaseRole;
 use Ormish::DataStore;
 
@@ -198,6 +201,8 @@ sub debug {
 
 package Ormish::Engine::DBI::QueryResult;
 use Moose;
+use namespace::autoclean;
+
 use Carp ();
 with 'Ormish::Query::ResultRole';
 
