@@ -28,6 +28,8 @@ use DBI;
 use DBIx::Simple;
 use Ormish;
 
+my $DEBUG = $ENV{PERL_ORMISH_DEBUG} || 0;
+
 my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
 $dbh->do('CREATE TABLE person (soc_sec_num VARCHAR, name VARCHAR, PRIMARY KEY (soc_sec_num))');
 $dbh->commit;
@@ -49,7 +51,7 @@ my $ds = Ormish::DataStore->new(
     $ds->add($o);
     ok defined Ormish::DataStore::of($o);
     $ds->commit;
-    diag Dump(\@sql);
+    ($DEBUG) && do { diag Dump(\@sql); };
     is scalar(@sql), 1;
     
     @sql = ();
@@ -58,7 +60,7 @@ my $ds = Ormish::DataStore->new(
     is $p, $o;
     $p->name('John X. Doe');
     $ds->commit;
-    diag Dump(\@sql);
+    ($DEBUG) && do { diag Dump(\@sql); };
     is scalar(@sql), 2;
 
     @sql = ();
@@ -67,7 +69,7 @@ my $ds = Ormish::DataStore->new(
     $p->ssn('111-222-1111');
     $p->ssn('111-222-1234');
     $ds->commit;
-    diag Dump(\@sql);
+    ($DEBUG) && do { diag Dump(\@sql); };
     is scalar(@sql), 1;
     is $p->ssn, '111-222-1234';
 
@@ -81,9 +83,13 @@ my $ds = Ormish::DataStore->new(
     is $p->ssn, '111-222-1234';
 
     # delete
-    #@sql = ();
-    #$ds->delete($p);
-    #is scalar(@sql), 0;
+    @sql = ();
+    $ds->delete($p);
+    is scalar(@sql), 0;
+    $ds->commit;
+    is scalar(@sql), 1;
+    ($DEBUG) && do { diag Dump(\@sql); };
+    
     
 }
 
