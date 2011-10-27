@@ -7,7 +7,6 @@ use SQL::Abstract::More;
 use DBIx::Simple;
 
 use Ormish::Engine::BaseRole;
-use Ormish::DataStore;
 
 with 'Ormish::Engine::BaseRole';
 
@@ -87,6 +86,30 @@ sub update_object_undo {
     # nop
 }
 
+# ---
+
+sub delete_object {
+    my ($self, $datastore, $obj, $oid_attr_values) = @_;
+    my $db = DBIx::Simple->new($self->dbh);
+
+    my $class = ref($obj) || '';
+    my $mapping = $datastore->mapping_of_class($class);
+    my $table_rows = $mapping->object_update_table_rows($obj, $oid_attr_values);
+    foreach my $table (keys %$table_rows) {
+        map {
+            my ($row, $where) = @$_;
+            my ($stmt, @bind) = $self->sql_abstract->delete($table, $where);
+            $db->query($stmt, @bind)->flat; 
+            $self->debug([ $stmt, \@bind ]);
+        } @{$table_rows->{$table}};
+    }
+}
+
+sub delete_object_undo {
+    # nop
+}
+
+# ---
 
 sub commit {
     my ($self) = @_;
@@ -116,8 +139,11 @@ sub get_object_by_oid {
         $self->debug([ $stmt, \@bind ]);
         my $h = $r->hash;
         return if (not defined $h);
-        # TODO
+
+        # TODO: whose responsibility is it to "manage" the object (the task done by the code below)
+        # ---
         my $tmp_o = $mapping->new_object_from_hashref($h);
+        
         my $oid_str = $mapping->oid->as_str($tmp_o);
         my $o = $datastore->idmap_get($mapping, $oid_str);
         if ($o) {

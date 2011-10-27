@@ -5,8 +5,11 @@ use strict;
 
 our $VERSION = '0.1000';
 
+use Ormish::Engine::DBI;
 use Ormish::DataStore;
+
 use Ormish::Mapping;
+
 use Ormish::OID::Serial;
 use Ormish::OID::Natural;
 

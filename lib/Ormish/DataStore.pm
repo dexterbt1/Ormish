@@ -8,7 +8,6 @@ use Carp();
 use YAML;
 
 use Ormish::Query;
-use Ormish::Engine::DBI;
 
 has 'engine'            => (is => 'ro', isa => 'Ormish::Engine::BaseRole', );
 has 'auto_map'          => (is => 'ro', isa => 'Bool', default => sub { 0 });
@@ -16,7 +15,8 @@ has 'auto_map_method'   => (is => 'rw', isa => 'Str', default => sub { '_ORMISH_
 has 'debug_log'         => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
 
 has '_mappings'         => (is => 'ro', isa => 'HashRef[Str]', default => sub { { } });
-has '_work_queue'       => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
+has '_work_queue'       => (is => 'rw', isa => 'ArrayRef', default => sub { [] } );
+has '_work_flushed'     => (is => 'rw', isa => 'ArrayRef', default => sub { [] } );
 
 # ---
 my %store_of = ();
@@ -27,6 +27,7 @@ my %classes_with_hooks = ();
 
 sub of { # ---Function
     my ($obj) = @_;
+    return if (not defined $obj);
     my $addr = refaddr($obj);
     return (exists $store_of{$addr}) ? $store_of{$addr} : undef;
 }
@@ -111,18 +112,42 @@ sub add {
     # TODO: traverse attributes and relationships ...
 }
 
+sub delete {
+    my ($self, $obj) = @_;
+    (of($obj) eq $self)
+        or Carp::confess("Cannot delete object from another datastore instance");
+    my $class   = ref($obj) || '';
+    my $mapping = $self->mapping_of_class($class);
+
+    unbind_object( $obj );
+
+    my $obj_oid = $mapping->oid->as_str( $obj );
+    if ($obj_oid) {
+        my $undo_delete = sub {
+            Ormish::DataStore::bind_object($obj, $self);
+            $self->idmap_add($mapping, $obj);
+        };
+        my $oids_on_delete = $mapping->oid->attr_values($obj);
+        push @{$self->_work_queue}, [ [ 'delete_object', $self, $obj, $oids_on_delete ], [ $undo_delete ] ];
+    }
+}
+
 sub flush {
     my ($self) = @_;
     while (my $work = shift @{$self->_work_queue}) {
         my ($engine_job, $undo) = @$work;
         my ($engine_method, @params) = @$engine_job;
         $self->engine->$engine_method(@params);
+        if ($undo) {
+            push @{$self->_work_flushed}, $work;
+        }
     }
 }
 
 sub commit {
     my ($self) = @_;
     $self->flush;
+    $self->_work_flushed( [ ] );
     $self->engine->commit;
 }
 
@@ -130,8 +155,9 @@ sub rollback {
     my ($self) = @_;
     return if (not defined $self->engine);
     $self->engine->rollback;
-    while (my $work = pop @{$self->_work_queue}) {
-        my ($engine_job, $undo) = @$work;
+    my $do_undo = sub {
+        my $w = shift;
+        my ($engine_job, $undo) = @$w;
         my ($engine_method, @params) = @$engine_job;
         my $undo_method = $engine_method.'_undo';
         $self->engine->$undo_method(@params);
@@ -140,7 +166,14 @@ sub rollback {
                 $u->();
             }
         }
+    };
+    while (my $work = pop @{$self->_work_queue}) {
+        $do_undo->($work);
     }
+    while (my $work = pop @{$self->_work_flushed}) {
+        $do_undo->($work);
+    }
+    
 }
 
 sub query {
@@ -202,7 +235,7 @@ sub _add_to_mappings {
         # install destructor hooks
         my $on_demolish_hook = sub {
             my ($o) = @_;
-            my $st = Ormish::DataStore::of($o); 
+            my $st = of($o); 
             if ($st) {
                 # delete in identity map of its datastore, if necessary
                 my $obj_m = $st->mapping_of_class($class);
@@ -234,7 +267,7 @@ sub _add_to_mappings {
             return sub {
                 my $o = shift @_;
                 if (scalar @_ > 0) {
-                    my $st = Ormish::DataStore::of($o); 
+                    my $st = of($o); 
                     if ($st) {
                         # mark as dirty, save the original oid value
                         $is_dirty{refaddr($st)}{refaddr($o)} = 1;

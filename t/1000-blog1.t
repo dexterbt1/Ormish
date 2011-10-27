@@ -161,28 +161,25 @@ my $ds = Ormish::DataStore->new(
     $result = $ds->query('My::Blog|b')->where('{b.id} > ?', 0)->select;
     @all = $result->list;
     is scalar(@all), 3;
-
+    $ds->commit;
 
     # ...
 
-    # bulk update
+    # delete
+    @sql = ();
     is Ormish::DataStore::of($b2), $ds;
-    my $affected = 0;
-    {
-        ok 1;
-        ## try to bulk update, ... this will actually touch $b2
-        #$affected = $ds->query('My::Blog')->where('{id} > ?', 100)->update({ title => uc($b2->title) });
-        #is $affected, 1;
-        #is $b2->title, 'SOME RANDOM BLOG';
-        #$ds->rollback;
-        #is $b2->title, 'Some Random Blog';
+    $ds->delete($b2);
+    isnt Ormish::DataStore::of($b2), $ds;
+    is Ormish::DataStore::of($b2), undef;
 
-        ## query-language expression in the values, plus alias support
-        #$affected = $ds->query('My::Blog|b')->where('{b.id} > ?', 100)->update('{b.title} = upper({b.title})');
-        #is $affected, 1;
-        #is $b2->title, 'SOME RANDOM BLOG';
-        
-    }
+    is scalar(@sql), 0;
+
+    $ds->flush;
+
+    is scalar(@sql), 1;
+    
+    $ds->rollback;
+    is Ormish::DataStore::of($b2), $ds;
         
 
     
