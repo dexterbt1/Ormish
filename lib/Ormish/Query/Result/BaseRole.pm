@@ -1,5 +1,6 @@
 package Ormish::Query::Result::BaseRole;
 use Moose::Role;
+use MooseX::Role::WithOverloading;
 
 has 'engine'        => (is => 'rw', does => 'Ormish::Engine::BaseRole', required => 1);
 has 'engine_query'  => (is => 'rw', isa => 'Any', required => 1); # engine-specific query, to be passed back later when needed
@@ -10,6 +11,11 @@ requires qw/
     next
     as_list
 /;
+
+use overload
+    '@{}'           => sub { [ $_[0]->as_list ] }
+    ;
+
 
 1;
 

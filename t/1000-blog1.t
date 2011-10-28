@@ -72,6 +72,7 @@ my $ds = Ormish::DataStore->new(
 
     $blog->title('The Ormish Blog');
     $blog->tagline('an alternative object-relational persistence for moose objects');
+    is scalar(@sql), 1;
     $ds->commit; # flush (update) and commit!
     is scalar(@sql), 2;
 
@@ -127,6 +128,7 @@ my $ds = Ormish::DataStore->new(
     is scalar(@sql), 5;
 
     $ds->add($b2);
+    is scalar(@sql), 5; # no effect, no queries issued
     $ds->commit;
     is scalar(@sql), 5; # no effect, no queries issued
 
@@ -190,6 +192,10 @@ my $ds = Ormish::DataStore->new(
     is scalar(@all), 3;
     is scalar(@sql), 1; # just 1 query
 
+    # overloaded dereferencing as arrayref @{}
+    @all = @$result; # should be cached by now
+    is scalar(@sql), 1; # just 1 query
+    is scalar(@all), 3;
 
     # ...
 
@@ -218,11 +224,14 @@ my $ds = Ormish::DataStore->new(
     my $dst = $ds;
 
     # just count
-    ($stats) = $dst->query('My::Blog')->select->as_columns({ count => 'COUNT(1)' });
+    ($stats) = $dst->query('My::Blog')->select_columns({ count => 'COUNT(1)' });
+    is $stats->{count}, 3;
 
-    # or the whole bunch
-    ($stats) = $dst->query('My::Blog')->select->as_columns({ count => 'COUNT(1)', min => 'MIN({id})', max => 'MAX({id})' })->as_list;
+    # or the whole bunch, and aliased
+    ($stats) = $dst->query('My::Blog|b')->select_columns({ count => 'COUNT(1)', min => 'MIN({b.id})', max_id => 'MAX({b.id})' });
     is $c->{count}, 3;
+    is $c->{min}, 1;
+    is $c->{max_id}, 123;
     #$c = $dst->query('My::Blog')->select->count;
     #is $c, 3;
     #$c = $dst->query('My::Blog')->select->size;
