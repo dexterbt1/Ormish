@@ -6,6 +6,7 @@ use Scalar::Util qw/blessed/;
 use SQL::Abstract::More;
 use DBIx::Simple;
 
+use Ormish::Engine::DBI::Result;
 use Ormish::Engine::BaseRole;
 
 with 'Ormish::Engine::BaseRole';
@@ -22,6 +23,7 @@ has 'dbixs'         => (is => 'rw', isa => 'DBIx::Simple', lazy => 1, default =>
 
 has 'log_sql'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
 has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new(case => 'lower') });
+has 'result_class'  => (is => 'rw', does => 'Ormish::Query::Result::BaseRole', default => 'Ormish::Engine::DBI::Result');
 
 
 # TODO: how do we handle multi-table inheritance
@@ -41,13 +43,12 @@ sub insert_object {
         map {
             my ($row, $where) = @$_;
             my ($stmt, @bind) = $self->sql_abstract->insert( $table, $row );
-            $db->query($stmt, @bind)->flat; 
+            $self->execute_raw_query([$stmt, \@bind])->flat; 
             # handle serial pk
             my $auto_id = $db->last_insert_id(undef, undef, undef, undef);
             if ($mapping->oid->is_db_generated) {
                 $mapping->oid->set_object_identity( $obj, $auto_id );
             }
-            $self->debug([ $stmt, \@bind ]);
         } @{$table_rows->{$table}};
     }
     $datastore->idmap_add($mapping, $obj);
@@ -75,8 +76,7 @@ sub update_object {
         map {
             my ($row, $where) = @$_;
             my ($stmt, @bind) = $self->sql_abstract->update( $table, $row, $where);
-            $db->query($stmt, @bind)->flat; 
-            $self->debug([ $stmt, \@bind ]);
+            $self->execute_raw_query([$stmt, \@bind])->flat; 
         } @{$table_rows->{$table}};
     }
     $datastore->clean_dirty_obj($obj);
@@ -99,8 +99,7 @@ sub delete_object {
         map {
             my ($row, $where) = @$_;
             my ($stmt, @bind) = $self->sql_abstract->delete($table, $where);
-            $db->query($stmt, @bind)->flat; 
-            $self->debug([ $stmt, \@bind ]);
+            $self->execute_raw_query([$stmt, \@bind])->flat; 
         } @{$table_rows->{$table}};
     }
 }
@@ -135,8 +134,7 @@ sub get_object_by_oid {
             -where      => { $oid_col => $oid },
             -limit      => 1,
         );
-        my $r = $db->query($stmt, @bind);
-        $self->debug([ $stmt, \@bind ]);
+        my $r = $self->execute_raw_query([$stmt, \@bind]);
         my $h = $r->hash;
         return if (not defined $h);
 
@@ -156,30 +154,15 @@ sub get_object_by_oid {
 }
 
 
-sub do_select {
+sub query_select {
     my ($self, $datastore, $query) = @_;
 
     my @cta = @{$query->meta_result_cta};
-    my $qkv = $query->meta_result_qkv;
     
     # TODO: add joins later
     # TODO: add multi-table mapping of a class
     {
-        my ($class, $table, $alias) = (shift @cta, shift @cta, shift @cta);
-        my $m = $datastore->mapping_of_class($class);
-
-        # for substituting query key-value placeholders
-        # ---
-        my $subst_qkv = sub { # args(\%qkv, $subj)
-            my @placeholders = ($_[1] =~ /\{(.*?)\}/g);
-            foreach my $ph (@placeholders) {
-                next if (not exists $_[0]->{$ph});
-                my $v = $_[0]->{$ph};
-                my $pat = '{'.$ph.'}';
-                $_[1] =~ s[$pat][$v]g;
-            }
-            return $_[1];
-        };
+        my ($class, $table, $alias) = splice(@cta, 0, 3);
 
         # build query
         # ---
@@ -191,7 +174,7 @@ sub do_select {
             if ($alias) {
                 @tmp_from_spec = ( "{$class} as {$alias}" );
             }
-            $from_spec = [ map { $subst_qkv->($qkv, $_) } @tmp_from_spec ];
+            $from_spec = [ map { $query->interpolate_result_qkv($_) } @tmp_from_spec ];
         }
         
         my ($sql_sel, @sql_sel_bind) = $self->sql_abstract->select( -from => $from_spec );
@@ -203,28 +186,28 @@ sub do_select {
             $sql_where = 'where '.$sql_where;
         }
 
-        my $stmt = $subst_qkv->(
-            $qkv, 
-            join(' ',
-                $sql_sel,
-                $sql_where,
-                # ...
-                # ... more here later TODO
-            ),
-        );
+        my $tmp_stmt = join(' ', $sql_sel, $sql_where ); # more SQL syntax later
+
+        my $stmt = $query->interpolate_result_qkv($tmp_stmt);
 
         my @bind = (@sql_sel_bind, @sql_where_bind);
 
-        # do query
-        my $r = $self->dbixs->query($stmt, @bind);
-        return Ormish::Engine::DBI::QueryResult->new(
-            datastore       => $datastore,
-            query           => $query,
-            dbixs_result    => $r,
+        # be lazy, query later
+        return $self->result_class->new(
+            query               => $query,
+            engine              => $self,
+            engine_query        => [ $stmt, \@bind ],
         );
     }
 }
 
+
+# exec SQL, TODO: perhaps refactor this so that the result object doesn't have to know about this
+sub execute_raw_query {
+    my ($self, $raw_query) = @_;
+    $self->debug($raw_query);
+    return $self->dbixs->query($raw_query->[0], @{$raw_query->[1]});
+}
 
 sub debug {
     my ($self, $info) = @_;
@@ -232,65 +215,9 @@ sub debug {
 }
 
 
-# ============================================================================
-
-package Ormish::Engine::DBI::QueryResult;
-use Moose;
-use namespace::autoclean;
-
-use Carp ();
-use Ormish::Query::ResultRole;
-
-with 'Ormish::Query::ResultRole';
-
-has 'dbixs_result'      => (is => 'rw', isa => 'DBIx::Simple::Result', required => 1);
-has '_cache_result_cta' => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
-has '_cache_mapping'    => (is => 'rw', isa => 'HashRef', default => sub { { } });
-
-sub BUILD {
-    my ($self) = @_;
-    my @result_cta = @{$self->query->meta_result_cta};
-    $self->_cache_result_cta( \@result_cta );
-    # for now, build only 1 class 
-    my ($class, $table, $alias) = @{$self->_cache_result_cta};
-    $self->_cache_mapping->{$class} = $self->datastore->mapping_of_class($class);
-}
-
-sub _next_row {
-    my ($self) = @_;
-    my $row = $self->dbixs_result->hash; 
-}
-
-sub next {
-    my ($self) = @_;
-    my $row = $self->_next_row();
-    return if (not $row);
-    # for now, build only 1 class 
-    my ($class, $table, $alias) = @{$self->_cache_result_cta};
-    my $mapping = $self->_cache_mapping->{$class};
-    my $datastore = $self->datastore;
-    my $tmp_o = $mapping->new_object_from_hashref($row);
-    my $oid_str = $mapping->oid->as_str($tmp_o);
-    my $o = $datastore->idmap_get($mapping, $oid_str);
-    if ($o) {
-        return $o;
-    }
-    Ormish::DataStore::bind_object($tmp_o, $datastore);
-    $datastore->idmap_set($mapping, $tmp_o);
-    return $tmp_o;
-}
-
-sub list {
-    my ($self) = @_;
-    my @out = ();
-    while (my $b = $self->next) {
-        push @out, $b;
-    }
-    return @out;
-}
-
 __PACKAGE__->meta->make_immutable;
 
 1;
+
 
 __END__

@@ -133,11 +133,12 @@ my $ds = Ormish::DataStore->new(
     # --- query result
 
     my $c;
+    my $q;
     my $result;
     my @all;
 
     # iterator interface
-    $result = $ds->query('My::Blog')->select; # should be all 3
+    $result = $ds->query('My::Blog')->select; # hold that query until iteration time
     while (my $b = $result->next) {
         isa_ok $b, 'My::Blog';
         $c++;
@@ -146,7 +147,7 @@ my $ds = Ormish::DataStore->new(
 
     # pull all objects into memory as a list
     $result = $ds->query('My::Blog')->select;
-    @all = $result->list;
+    @all = $result->as_list;
     is scalar(@all), 3;
     isa_ok $all[0], 'My::Blog';
     isa_ok $all[1], 'My::Blog';
@@ -154,14 +155,31 @@ my $ds = Ormish::DataStore->new(
 
     # basic where
     $result = $ds->query('My::Blog')->where('{title} LIKE ?', '%blog')->select;
-    @all = $result->list;
+    @all = $result->as_list;
     is scalar(@all), 2;
 
     # aliases
     $result = $ds->query('My::Blog|b')->where('{b.id} > ?', 0)->select;
-    @all = $result->list;
+    @all = $result->as_list;
     is scalar(@all), 3;
     $ds->commit;
+
+    # lazy and caching behavior of result classes
+    @sql = ();
+    is scalar(@sql), 0;
+    $result = $ds->query('My::Blog|b')->select;
+    is scalar(@sql), 0; # lazy
+    @all = $result->as_list;
+    is scalar(@all), 3;
+    isa_ok $all[0], 'My::Blog';
+    isa_ok $all[1], 'My::Blog';
+    isa_ok $all[2], 'My::Blog';
+
+    is scalar(@sql), 1; # just 1 query
+    @all = $result->as_list; # should be cached by now
+    is scalar(@all), 3;
+    is scalar(@sql), 1; # just 1 query
+
 
     # ...
 
@@ -181,7 +199,25 @@ my $ds = Ormish::DataStore->new(
     $ds->rollback;
     is Ormish::DataStore::of($b2), $ds;
         
+    # aggregations
+=pod
+    @sql = ();
+    my $c;
+    my $stats;
 
+    my $dst = $ds;
+
+    # just count
+    ($stats) = $dst->query('My::Blog')->select->as_columns({ count => 'COUNT(1)' });
+
+    # or the whole bunch
+    ($stats) = $dst->query('My::Blog')->select->as_columns({ count => 'COUNT(1)', min => 'MIN({id})', max => 'MAX({id})' })->as_list;
+    is $c->{count}, 3;
+    #$c = $dst->query('My::Blog')->select->count;
+    #is $c, 3;
+    #$c = $dst->query('My::Blog')->select->size;
+    #is $c, 3;
+=cut
     
 }
 
@@ -189,4 +225,4 @@ ok 1;
 
 
 __END__
-
+:q

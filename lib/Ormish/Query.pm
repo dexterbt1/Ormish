@@ -10,6 +10,7 @@ has 'result_types'      => (is => 'rw', isa => 'ArrayRef[Str]', trigger => sub {
 has '_meta_result_qkv'  => (is => 'rw', isa => 'HashRef');
 has '_meta_result_cta'  => (is => 'rw', isa => 'ArrayRef');
 has '_filter_cond'      => (is => 'rw', isa => 'ArrayRef');
+has '_filter_static'    => (is => 'rw', isa => 'ArrayRef');
 
 
 sub meta_result_cta {
@@ -54,13 +55,14 @@ sub _build_meta_result {
         my @tmp_cta = @cta;
         while (scalar(@tmp_cta)>=3) {
             my ($class, $table, $alias) = splice(@tmp_cta, 0, 3);
-            my $m = $self->datastore->mapping_of_class($class);
             $qkv{$class} = $table;
             if ($alias) {
                 $qkv{$alias} = $alias;
             }
             my $alias_or_class = $alias || $class;
             my $alias_or_table = $alias || $table;
+
+            my $m = $self->datastore->mapping_of_class($class);
 
             ## oid 
             #my $oid_attr_to_col = $m->oid->attr_to_col;
@@ -81,6 +83,20 @@ sub _build_meta_result {
 }
 
 
+sub interpolate_result_qkv { 
+    my ($self, $subject) = @_;
+    my $qkv = $self->_meta_result_qkv;
+    my @placeholders = ($subject =~ /\{(.*?)\}/g);
+    foreach my $ph (@placeholders) {
+        next if (not exists $qkv->{$ph});
+        my $v = $qkv->{$ph};
+        my $pat = '{'.$ph.'}';
+        $subject =~ s[$pat][$v]g;
+    }
+    return $subject;
+}
+
+
 sub meta_filter_condition {
     my ($self) = @_;
     return $self->_filter_cond;
@@ -98,9 +114,9 @@ sub get {
 
 
 sub select {
-    my ($self) = @_;
+    my ($self, $override_columns) = @_;
     $self->datastore->flush;
-    return $self->datastore->engine->do_select($self->datastore, $self);
+    return $self->datastore->engine->query_select($self->datastore, $self, $override_columns);
 }
 
 
@@ -109,6 +125,18 @@ sub where {
     $self->_filter_cond(\@_);
     return $self;
 }
+
+
+#sub count {
+#    my $hash = $_[0]->select({ count => 'COUNT(1)'});
+#    my $q = $self->meta->clone_object($self, {
+#    });
+#    return $hash->{count};
+#}
+
+#sub size {
+#    $_[0]->count;
+#}
 
 
 __PACKAGE__->meta->make_immutable;
