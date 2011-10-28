@@ -49,8 +49,8 @@ $dbh->commit;
 
 my @sql = ();
 my $ds = Ormish::DataStore->new( 
-    engine      => Ormish::Engine::DBI->new( dbh => $dbh, log_sql => \@sql ), 
-    auto_map    => 1,
+    engine          => Ormish::Engine::DBI->new( dbh => $dbh, log_sql => \@sql ), 
+    auto_register   => 1,
 );
 
 
@@ -215,8 +215,8 @@ my $ds = Ormish::DataStore->new(
     $ds->rollback;
     is Ormish::DataStore::of($b2), $ds;
         
-    # aggregations
 =pod
+    # aggregations
     @sql = ();
     my $c;
     my $stats;
@@ -232,10 +232,14 @@ my $ds = Ormish::DataStore->new(
     is $c->{count}, 3;
     is $c->{min}, 1;
     is $c->{max_id}, 123;
-    #$c = $dst->query('My::Blog')->select->count;
-    #is $c, 3;
-    #$c = $dst->query('My::Blog')->select->size;
-    #is $c, 3;
+
+    # or the somewhat easier count,min,max result methods
+    $c = $dst->query('My::Blog')->select->count;
+    is $c, 3;
+    $c = $dst->query('My::Blog')->select->min('{id}');
+    is $c, 1;
+    $c = $dst->query('My::Blog')->select->max('{id}');
+    is $c, 1;
 =cut
     
 }

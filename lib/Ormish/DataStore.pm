@@ -9,14 +9,14 @@ use YAML;
 
 use Ormish::Query;
 
-has 'engine'            => (is => 'ro', isa => 'Ormish::Engine::BaseRole', );
-has 'auto_map'          => (is => 'ro', isa => 'Bool', default => sub { 0 });
-has 'auto_map_method'   => (is => 'rw', isa => 'Str', default => sub { '_ORMISH_MAPPING' } );
-has 'debug_log'         => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
+has 'engine'                => (is => 'ro', isa => 'Ormish::Engine::BaseRole', );
+has 'auto_register'         => (is => 'ro', isa => 'Bool', default => sub { 0 });
+has 'auto_register_method'  => (is => 'rw', isa => 'Str', default => sub { '_ORMISH_MAPPING' } );
+has 'debug_log'             => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
 
-has '_mappings'         => (is => 'ro', isa => 'HashRef[Str]', default => sub { { } });
-has '_work_queue'       => (is => 'rw', isa => 'ArrayRef', default => sub { [] } );
-has '_work_flushed'     => (is => 'rw', isa => 'ArrayRef', default => sub { [] } );
+has '_mappings'             => (is => 'ro', isa => 'HashRef[Str]', default => sub { { } });
+has '_work_queue'           => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
+has '_work_flushed'         => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
 
 
 
@@ -130,7 +130,7 @@ sub flush {
 sub commit {
     my ($self) = @_;
     $self->flush;
-    $self->_work_flushed( [ ] );
+    @{$self->_work_flushed} = ();
     $self->engine->commit;
 }
 
@@ -212,9 +212,9 @@ sub object_from_hashref {
 
 sub mapping_of_class {
     my ($self, $class) = @_;
-    if ($self->auto_map) {
+    if ($self->auto_register) {
         if (! exists $self->_mappings->{$class}) {
-            my $method = $self->auto_map_method;
+            my $method = $self->auto_register_method;
             if ($class->can($method)) {
                 my $m = $class->$method;
                 $self->_add_to_mappings( $m );

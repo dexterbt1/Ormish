@@ -114,10 +114,19 @@ sub get {
 
 
 sub select {
-    my ($self, $override_columns) = @_;
+    my ($self) = @_;
     $self->datastore->flush;
-    return $self->datastore->engine->query_select($self->datastore, $self, $override_columns);
+    return $self->datastore->engine->query_select($self->datastore, $self);
 }
+
+
+=pod
+sub select_columns {
+    my ($self, $column_spec) = @_;
+    $self->datastore->flush;
+    return $self->datastore->engine->column_select($self->datastore, $self, $column_spec);
+}
+=cut
 
 
 sub where {

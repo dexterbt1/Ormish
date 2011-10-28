@@ -36,8 +36,8 @@ $dbh->commit;
 
 my @sql = ();
 my $ds = Ormish::DataStore->new( 
-    engine      => Ormish::Engine::DBI->new( dbh => $dbh, log_sql => \@sql ), 
-    auto_map    => 1,
+    engine          => Ormish::Engine::DBI->new( dbh => $dbh, log_sql => \@sql ), 
+    auto_register   => 1,
 );
 
 {
