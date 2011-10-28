@@ -18,7 +18,11 @@ has '_mappings'         => (is => 'ro', isa => 'HashRef[Str]', default => sub { 
 has '_work_queue'       => (is => 'rw', isa => 'ArrayRef', default => sub { [] } );
 has '_work_flushed'     => (is => 'rw', isa => 'ArrayRef', default => sub { [] } );
 
-# ---
+
+
+
+# --- unit of work methods
+
 my %store_of = ();
 my %ident_of = ();
 my %is_dirty = ();
@@ -42,26 +46,6 @@ sub clean_dirty_obj {
     delete $is_dirty{refaddr($self)}{refaddr($obj)};
 }
 
-sub idmap_add {
-    my ($self, $mapping, $obj) = @_;
-    my $obj_class = $mapping->for_class;
-    my $obj_oid = $mapping->oid->as_str( $obj );
-    (defined $obj_oid)
-        or Carp::confess("Cannot manage object without identity yet");
-    # datastore -> class -> obj_oid = obj
-    $ident_of{refaddr($self)}{$obj_class}{$obj_oid} = $obj;
-    weaken $ident_of{refaddr($self)}{$obj_class}{$obj_oid};
-}
-
-sub idmap_get {
-    my ($self, $mapping, $oid_str) = @_;
-    my $class = $mapping->for_class;
-    if (exists($ident_of{refaddr($self)}{$class}{$oid_str})) {
-        # return cached copy from identity map
-        return $ident_of{refaddr($self)}{$class}{$oid_str};
-    }
-}
-
 sub bind_object { # --- Function
     my ($obj, $datastore) = @_;
     # bind obj to datastore 
@@ -79,7 +63,6 @@ sub unbind_object { # --- Function
 sub add {
     my ($self, $obj) = @_;
     # check class if mapped; 
-    # TODO: possible convenience to cache and auto map those classes with _DEFAULT_MAPPING
     my $obj_addr = refaddr($obj);
     my $class   = ref($obj) || '';
     my $mapping = $self->mapping_of_class($class);
@@ -176,6 +159,8 @@ sub rollback {
     
 }
 
+# --- query factory method
+
 sub query {
     my ($self, @result_types) = @_;
     return Ormish::Query->new( 
@@ -185,7 +170,45 @@ sub query {
 }
 
 
-# --- helper routines
+# --- identity map methods
+
+sub idmap_add {
+    my ($self, $mapping, $obj) = @_;
+    my $obj_class = $mapping->for_class;
+    my $obj_oid = $mapping->oid->as_str( $obj );
+    (defined $obj_oid)
+        or Carp::confess("Cannot manage object without identity yet");
+    # datastore -> class -> obj_oid = obj
+    $ident_of{refaddr($self)}{$obj_class}{$obj_oid} = $obj;
+    weaken $ident_of{refaddr($self)}{$obj_class}{$obj_oid};
+}
+
+sub idmap_get {
+    my ($self, $mapping, $oid_str) = @_;
+    my $class = $mapping->for_class;
+    if (exists($ident_of{refaddr($self)}{$class}{$oid_str})) {
+        # return cached copy from identity map
+        return $ident_of{refaddr($self)}{$class}{$oid_str};
+    }
+}
+
+sub object_from_hashref {
+    my ($self, $mapping, $h) = @_;
+    my $tmp_o       = $mapping->new_object_from_hashref($h);
+    my $oid_str     = $mapping->oid->as_str($tmp_o);
+    my $o = $self->idmap_get($mapping, $oid_str);
+    if ($o) {
+        # ignore the temporary new object, return existing object from identity map
+        return $o;
+    }
+    Ormish::DataStore::bind_object($tmp_o, $self);
+    $self->idmap_add($mapping, $tmp_o);
+    return $tmp_o;
+}
+
+
+
+# --- mapping routines
 
 sub mapping_of_class {
     my ($self, $class) = @_;

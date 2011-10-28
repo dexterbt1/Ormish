@@ -66,17 +66,12 @@ sub _build_object_tree {
 
         # TODO: build the actual tree, including relations
         my ($class, $table, $alias) = @{$self->_cache_result_cta};
-        my $mapping     = $class_to_mapping->{$class};
-        my $tmp_o       = $mapping->new_object_from_hashref($row);
-        my $oid_str     = $mapping->oid->as_str($tmp_o);
-        my $o = $datastore->idmap_get($mapping, $oid_str);
-        if ($o) {
-            $map_class_oid{$class}{$oid_str} = $o;
-            next;
-        }
-        Ormish::DataStore::bind_object($tmp_o, $datastore);
-        $datastore->idmap_set($mapping, $tmp_o);
-        $map_class_oid{$class}{$oid_str} = $tmp_o;
+
+        my $mapping = $class_to_mapping->{$class};
+        my $o       = $datastore->object_from_hashref($mapping, $row);
+        my $oid_str = $mapping->oid->as_str($o);
+
+        $map_class_oid{$class}{$oid_str} = $o;
     }
     my @objects = ();
     foreach my $class (keys %$class_to_mapping) {

@@ -132,7 +132,7 @@ sub get_object_by_oid {
         my ($stmt, @bind) = $self->sql_abstract->select( 
             -from       => [ $mapping->table ],
             -where      => { $oid_col => $oid },
-            -limit      => 1,
+            -limit      => 1, # for now, limit to the first row
         );
         my $r = $self->execute_raw_query([$stmt, \@bind]);
         my $h = $r->hash;
@@ -140,16 +140,11 @@ sub get_object_by_oid {
 
         # TODO: whose responsibility is it to "manage" the object (the task done by the code below)
         # ---
-        my $tmp_o = $mapping->new_object_from_hashref($h);
-        
-        my $oid_str = $mapping->oid->as_str($tmp_o);
-        my $o = $datastore->idmap_get($mapping, $oid_str);
-        if ($o) {
-            return $o;
-        }
-        Ormish::DataStore::bind_object($tmp_o, $datastore);
-        $datastore->idmap_add($mapping, $tmp_o);
-        return $tmp_o;
+        my $o = $datastore->object_from_hashref($mapping, $h);
+        return $o;
+    }
+    else {
+        Carp::confess("Multi-column primary keys are not yet supported.");
     }
 }
 
