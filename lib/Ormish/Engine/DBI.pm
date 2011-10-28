@@ -182,8 +182,18 @@ sub query_select {
         my $where_spec = $query->meta_filter_condition;
         my ($sql_where, @sql_where_bind) = ('', );
         if ($where_spec) {
-            ($sql_where, @sql_where_bind) = @$where_spec;
-            $sql_where = 'where '.$sql_where;
+            if (ref($where_spec) eq 'ARRAY') {
+                ($sql_where, @sql_where_bind) = @$where_spec;
+                if (ref($sql_where) eq 'HASH') {
+                    ($sql_where, @sql_where_bind) = $self->sql_abstract->where($sql_where);
+                }
+                else {
+                    $sql_where = 'where '.$sql_where;
+                }
+            }
+            else {
+                Carp::croak("Unsupported \$query->where() type");
+            }
         }
 
         my $tmp_stmt = join(' ', $sql_sel, $sql_where ); # more SQL syntax later

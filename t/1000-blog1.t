@@ -138,12 +138,16 @@ my $ds = Ormish::DataStore->new(
     my @all;
 
     # iterator interface
+
+    @sql = ();
     $result = $ds->query('My::Blog')->select; # hold that query until iteration time
+    is scalar(@sql), 0;
     while (my $b = $result->next) {
         isa_ok $b, 'My::Blog';
         $c++;
     }
     is $c, 3;
+    is scalar(@sql), 1;
 
     # pull all objects into memory as a list
     $result = $ds->query('My::Blog')->select;
@@ -162,6 +166,12 @@ my $ds = Ormish::DataStore->new(
     $result = $ds->query('My::Blog|b')->where('{b.id} > ?', 0)->select;
     @all = $result->as_list;
     is scalar(@all), 3;
+    $ds->commit;
+
+    # use sql abstract + interpolation of query identifiers!
+    $result = $ds->query('My::Blog|b')->where({ '{b.id}' => { -in => [ 123 ] } })->select;
+    @all = $result->as_list;
+    is scalar(@all), 1;
     $ds->commit;
 
     # lazy and caching behavior of result classes
