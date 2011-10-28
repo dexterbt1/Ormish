@@ -12,7 +12,9 @@ requires qw/
 
     get_object_by_oid
 
-    query_select
+    objects_select
+    
+    rows_select
 
     execute_raw_query
 /;

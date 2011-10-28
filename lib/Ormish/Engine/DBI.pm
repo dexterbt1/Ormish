@@ -6,8 +6,8 @@ use Scalar::Util qw/blessed/;
 use SQL::Abstract::More;
 use DBIx::Simple;
 
-use Ormish::Engine::DBI::Result;
-use Ormish::Engine::BaseRole;
+use Ormish::Engine::DBI::ResultObjects;
+use Ormish::Engine::DBI::ResultRows;
 
 with 'Ormish::Engine::BaseRole';
 
@@ -23,7 +23,6 @@ has 'dbixs'         => (is => 'rw', isa => 'DBIx::Simple', lazy => 1, default =>
 
 has 'log_sql'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
 has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new(case => 'lower') });
-has 'result_class'  => (is => 'rw', does => 'Ormish::Query::Result::BaseRole', default => 'Ormish::Engine::DBI::Result');
 
 
 # TODO: how do we handle multi-table inheritance
@@ -138,8 +137,6 @@ sub get_object_by_oid {
         my $h = $r->hash;
         return if (not defined $h);
 
-        # TODO: whose responsibility is it to "manage" the object (the task done by the code below)
-        # ---
         my $o = $datastore->object_from_hashref($mapping, $h);
         return $o;
     }
@@ -149,11 +146,12 @@ sub get_object_by_oid {
 }
 
 
-sub query_select {
-    my ($self, $datastore, $query) = @_;
-
+sub _build_select {
+    my ($self, $datastore, $query, $opt_columns_spec) = @_;
     my @cta = @{$query->meta_result_cta};
     
+    my ($stmt, @bind, %user_columns);
+
     # TODO: add joins later
     # TODO: add multi-table mapping of a class
     {
@@ -165,14 +163,27 @@ sub query_select {
         my $from_spec;
         {
             # support single table for now
-            my @tmp_from_spec = ( "{$class}" );
-            if ($alias) {
-                @tmp_from_spec = ( "{$class} as {$alias}" );
+            my $table_alias = $self->sql_abstract->table_alias($table, $alias);
+            $from_spec = [ $query->interpolate_result_qkv($table_alias) ];
+        }
+
+        my @columns = ('*');
+        if (defined $opt_columns_spec) {
+            (ref($opt_columns_spec) eq 'ARRAY')
+                or Carp::confess("Cannot use '$opt_columns_spec' as column_spec, expected ARRAYREF");
+            @columns = ();
+            foreach my $col_spec (@$opt_columns_spec) {
+                my ($column, $alias) = split /\|/, $col_spec, 2;
+                $column = $query->interpolate_result_qkv($column);
+                if (not defined $alias) {
+                    $alias = $column;
+                }
+                $user_columns{$alias} = $column;
+                push @columns, $col_spec;
             }
-            $from_spec = [ map { $query->interpolate_result_qkv($_) } @tmp_from_spec ];
         }
         
-        my ($sql_sel, @sql_sel_bind) = $self->sql_abstract->select( -from => $from_spec );
+        my ($sql_sel, @sql_sel_bind) = $self->sql_abstract->select( -from => $from_spec, -columns => \@columns, );
 
         my $where_spec = $query->meta_filter_condition;
         my ($sql_where, @sql_where_bind) = ('', );
@@ -193,18 +204,39 @@ sub query_select {
 
         my $tmp_stmt = join(' ', $sql_sel, $sql_where ); # more SQL syntax later
 
-        my $stmt = $query->interpolate_result_qkv($tmp_stmt);
+        $stmt = $query->interpolate_result_qkv($tmp_stmt);
 
-        my @bind = (@sql_sel_bind, @sql_where_bind);
-
-        # be lazy, query later
-        return $self->result_class->new(
-            query               => $query,
-            engine              => $self,
-            engine_query        => [ $stmt, \@bind ],
-        );
+        @bind = (@sql_sel_bind, @sql_where_bind);
     }
+    return ($stmt, \@bind, \%user_columns);
+
 }
+
+
+
+sub objects_select {
+    my ($self, $datastore, $query) = @_;
+    my ($stmt, $bind, undef) = $self->_build_select($datastore, $query);
+    # be lazy, query later
+    return Ormish::Engine::DBI::ResultObjects->new(
+        query               => $query,
+        engine              => $self,
+        engine_query        => [ $stmt, $bind ],
+    );
+}
+
+
+sub rows_select {
+    my ($self, $datastore, $query, $opt_columns_spec) = @_;
+    my ($stmt, $bind, $user_columns) = $self->_build_select($datastore, $query, $opt_columns_spec);
+    # be lazy, query later
+    return Ormish::Engine::DBI::ResultRows->new(
+        query               => $query,
+        engine              => $self,
+        engine_query        => [ $stmt, $bind ],
+    );
+}
+
 
 
 # exec SQL, TODO: perhaps refactor this so that the result object doesn't have to know about this

@@ -113,20 +113,18 @@ sub get {
 }
 
 
-sub select {
+sub select_objects {
     my ($self) = @_;
     $self->datastore->flush;
-    return $self->datastore->engine->query_select($self->datastore, $self);
+    return $self->datastore->engine->objects_select($self->datastore, $self);
 }
 
 
-=pod
-sub select_columns {
-    my ($self, $column_spec) = @_;
+sub select_rows {
+    my ($self, $opt_columns_spec) = @_;
     $self->datastore->flush;
-    return $self->datastore->engine->column_select($self->datastore, $self, $column_spec);
+    return $self->datastore->engine->rows_select($self->datastore, $self, $opt_columns_spec);
 }
-=cut
 
 
 sub where {

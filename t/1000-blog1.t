@@ -142,7 +142,7 @@ my $ds = Ormish::DataStore->new(
     # iterator interface
 
     @sql = ();
-    $result = $ds->query('My::Blog')->select; # hold that query until iteration time
+    $result = $ds->query('My::Blog')->select_objects; # hold that query until iteration time
     is scalar(@sql), 0;
     while (my $b = $result->next) {
         isa_ok $b, 'My::Blog';
@@ -152,43 +152,43 @@ my $ds = Ormish::DataStore->new(
     is scalar(@sql), 1;
 
     # pull all objects into memory as a list
-    $result = $ds->query('My::Blog')->select;
-    @all = $result->as_list;
+    $result = $ds->query('My::Blog')->select_objects;
+    @all = $result->list;
     is scalar(@all), 3;
     isa_ok $all[0], 'My::Blog';
     isa_ok $all[1], 'My::Blog';
     isa_ok $all[2], 'My::Blog';
 
     # basic where
-    $result = $ds->query('My::Blog')->where('{title} LIKE ?', '%blog')->select;
-    @all = $result->as_list;
+    $result = $ds->query('My::Blog')->where('{title} LIKE ?', '%blog')->select_objects;
+    @all = $result->list;
     is scalar(@all), 2;
 
     # aliases
-    $result = $ds->query('My::Blog|b')->where('{b.id} > ?', 0)->select;
-    @all = $result->as_list;
+    $result = $ds->query('My::Blog|b')->where('{b.id} > ?', 0)->select_objects;
+    @all = $result->list;
     is scalar(@all), 3;
     $ds->commit;
 
     # use sql abstract + interpolation of query identifiers!
-    $result = $ds->query('My::Blog|b')->where({ '{b.id}' => { -in => [ 123 ] } })->select;
-    @all = $result->as_list;
+    $result = $ds->query('My::Blog|b')->where({ '{b.id}' => { -in => [ 123 ] } })->select_objects;
+    @all = $result->list;
     is scalar(@all), 1;
     $ds->commit;
 
     # lazy and caching behavior of result classes
     @sql = ();
     is scalar(@sql), 0;
-    $result = $ds->query('My::Blog|b')->select;
+    $result = $ds->query('My::Blog|b')->select_objects;
     is scalar(@sql), 0; # lazy
-    @all = $result->as_list;
+    @all = $result->list;
     is scalar(@all), 3;
     isa_ok $all[0], 'My::Blog';
     isa_ok $all[1], 'My::Blog';
     isa_ok $all[2], 'My::Blog';
 
     is scalar(@sql), 1; # just 1 query
-    @all = $result->as_list; # should be cached by now
+    @all = $result->list; # should be cached by now
     is scalar(@all), 3;
     is scalar(@sql), 1; # just 1 query
 
@@ -215,8 +215,7 @@ my $ds = Ormish::DataStore->new(
     $ds->rollback;
     is Ormish::DataStore::of($b2), $ds;
         
-=pod
-    # aggregations
+    # aggregation
     @sql = ();
     my $c;
     my $stats;
@@ -224,23 +223,17 @@ my $ds = Ormish::DataStore->new(
     my $dst = $ds;
 
     # just count
-    ($stats) = $dst->query('My::Blog')->select_columns({ count => 'COUNT(1)' });
-    is $stats->{count}, 3;
+    ($stats) = $dst->query('My::Blog')->select_rows(['COUNT(1)|c'])->list;
+    is $stats->{c}, 3;
+    is scalar(@sql), 1;
+    @sql = ();
 
     # or the whole bunch, and aliased
-    ($stats) = $dst->query('My::Blog|b')->select_columns({ count => 'COUNT(1)', min => 'MIN({b.id})', max_id => 'MAX({b.id})' });
-    is $c->{count}, 3;
-    is $c->{min}, 1;
-    is $c->{max_id}, 123;
-
-    # or the somewhat easier count,min,max result methods
-    $c = $dst->query('My::Blog')->select->count;
-    is $c, 3;
-    $c = $dst->query('My::Blog')->select->min('{id}');
-    is $c, 1;
-    $c = $dst->query('My::Blog')->select->max('{id}');
-    is $c, 1;
-=cut
+    ($stats) = $dst->query('My::Blog|b')->select_rows(['COUNT(1)|count', 'MIN({b.id})|min', 'MAX({b.id})|max_id' ])->list;
+    is $stats->{count}, 3;
+    is $stats->{min}, 1;
+    is $stats->{max_id}, 123;
+    is scalar(@sql), 1;
     
 }
 
