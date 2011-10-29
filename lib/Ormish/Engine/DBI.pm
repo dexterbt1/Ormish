@@ -51,6 +51,7 @@ sub insert_object {
         } @{$table_rows->{$table}};
     }
     $datastore->idmap_add($mapping, $obj);
+    $mapping->setup_object_relations($obj);
 }
 
 sub insert_object_undo {

@@ -56,7 +56,7 @@ my $ds = Ormish::DataStore->new(
     
     @sql = ();
 
-    $p = $ds->query('Person')->get('111-111-1111');
+    $p = $ds->query('Person')->fetch('111-111-1111');
     is $p, $o;
     $p->name('John X. Doe');
     $ds->commit;

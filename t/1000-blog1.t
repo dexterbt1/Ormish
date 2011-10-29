@@ -2,12 +2,13 @@
     package My::Blog;
     use Moose;
     use namespace::autoclean;
+    use Set::Object;
 
-    has 'id'            => (is => 'rw', isa => 'Any'); # needed as the object identity
+    has 'id'            => (is => 'rw', isa => 'Int|Undef'); # needed as the object identity
     has 'name'          => (is => 'rw', isa => 'Str', required => 1);
     has 'title'         => (is => 'rw', isa => 'Str');
     has 'tagline'       => (is => 'rw', isa => 'Str');
-    has 'posts'         => (is => 'rw', isa => 'Set::Object');
+    has 'posts'         => (is => 'ro', isa => 'Set::Object', default => sub { Set::Object->new() });
     
     sub _ORMISH_MAPPING {
         return Ormish::Mapping->new(  # this assumes you'll be using Ormish later, without "use"ing it right now
@@ -20,20 +21,45 @@
                 tagline|c_tag_line
             /],
             oid             => Ormish::OID::Serial->new( attribute => 'id' ),
-            #relations       => [
-            #    Ormish::Relation::OneToMany->new( attr => 'posts', to_class => 'My::Post' );
-            #],
+            relations       => {
+                posts           => Ormish::Relation::OneToMany->new( to_class => 'My::Post' ),
+            },
         );
     }
     1;
 
     __PACKAGE__->meta->make_immutable;
 }
-#{
-#    package My::Post;
-#    use Moose;
-#    use id              => (is => 'rw', isa => 
-#}
+{
+    package My::Post;
+    use Moose;
+    use namespace::autoclean;
+
+    has 'id'            => (is => 'rw', isa => 'Int|Undef');
+    has 'title'         => (is => 'rw', isa => 'Str', required => 1);
+    has 'content'       => (is => 'rw', isa => 'Str');
+    has 'parent_blog'   => (is => 'rw', isa => 'My::Blog');
+
+    sub _ORMISH_MAPPING {
+        return Ormish::Mapping->new(  
+            for_class       => __PACKAGE__,
+            table           => 'blog_post',
+            attributes      => [qw/
+                id
+                title
+                content
+                parent_blog|parent_blog_id
+            /],
+            oid             => Ormish::OID::Serial->new( attribute => 'id' ),
+            relations       => {
+                parent_blog     => Ormish::Relation::ManyToOne->new( to_class => 'My::Blog' ),
+            },
+        );
+    }
+    1;
+
+    __PACKAGE__->meta->make_immutable;
+}
 
 package main;
 use strict;
@@ -45,6 +71,8 @@ use Ormish;
 
 my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
 $dbh->do('CREATE TABLE blog_blog (b_id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, c_tag_line VARCHAR)');
+$dbh->do('CREATE TABLE blog_post (id INTEGER PRIMARY KEY, title VARCHAR, content BLOB, parent_blog_id INTEGER, 
+            FOREIGN KEY (parent_blog_id) REFERENCES blog_blog (b_id))');
 $dbh->commit;
 
 my @sql = ();
@@ -93,7 +121,7 @@ my $ds = Ormish::DataStore->new(
     $ds->add($blog2);
     is scalar(@sql), 0;
     
-    my $b1 = $ds->query('My::Blog')->get($blog->id); # by oid
+    my $b1 = $ds->query('My::Blog')->fetch($blog->id); # by oid
     is $b1, $blog; # string 'eq' comparison
     is refaddr($b1), refaddr($blog);
     is scalar(@sql), 2; # insert + select
@@ -104,7 +132,7 @@ my $ds = Ormish::DataStore->new(
     $ds->commit;
     {
         # make sure that single object updates affects only the oids concerned
-        my $bx = $ds->query("My::Blog")->get($b1->id);
+        my $bx = $ds->query("My::Blog")->fetch($b1->id);
         is $bx, $b1;
         is $b1, $blog;
         isnt $b1, $blog2;
@@ -118,7 +146,7 @@ my $ds = Ormish::DataStore->new(
         123, 'some-random-blog', 'Some Random Blog', '... nothing here, move along',
         );
 
-    my $b2 = $ds->query('My::Blog')->get(123);
+    my $b2 = $ds->query('My::Blog')->fetch(123);
     isa_ok $b2, 'My::Blog';
     is Ormish::DataStore::of($b2), $ds;
     is $b2->id, 123;
@@ -234,11 +262,36 @@ my $ds = Ormish::DataStore->new(
     is $stats->{min}, 1;
     is $stats->{max_id}, 123;
     is scalar(@sql), 1;
+    $ds->commit;
     
 }
+
+{
+    # --- relation tests
+    @sql = ();
+
+    my $b = $ds->query('My::Blog')->fetch(1); # reuse existing
+    isa_ok $b, 'My::Blog';
+    is scalar(@sql), 1;
+    isa_ok $b->posts, 'Set::Object';
+
+    my $fp = My::Post->new( title => 'first post!' ); 
+
+    $b->posts->insert( $fp );
+    is scalar(@sql), 1; # lazy insert
+
+    $ds->commit;
+    is scalar(@sql), 2; 
+    isnt $fp->id, undef;
+    #is $fp->parent_blog, $b;
+
+
+}
+
+
 
 ok 1;
 
 
 __END__
-:q
+

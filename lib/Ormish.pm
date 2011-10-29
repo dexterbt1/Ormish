@@ -13,6 +13,9 @@ use Ormish::Mapping;
 use Ormish::OID::Serial;
 use Ormish::OID::Natural;
 
+use Ormish::Relation::OneToMany;
+use Ormish::Relation::ManyToOne;
+
 1; # End of Ormish
 
 __END__

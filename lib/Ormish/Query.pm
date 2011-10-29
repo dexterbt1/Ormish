@@ -103,7 +103,7 @@ sub meta_filter_condition {
 }
 
 
-sub get {
+sub fetch {
     my ($self, $oid) = @_;
     $self->datastore->flush;
     (scalar(@{$self->result_types})==1)

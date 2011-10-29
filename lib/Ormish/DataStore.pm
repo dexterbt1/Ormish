@@ -203,6 +203,7 @@ sub object_from_hashref {
     }
     Ormish::DataStore::bind_object($tmp_o, $self);
     $self->idmap_add($mapping, $tmp_o);
+    $mapping->setup_object_relations($tmp_o);    
     return $tmp_o;
 }
 
@@ -218,6 +219,7 @@ sub mapping_of_class {
             if ($class->can($method)) {
                 my $m = $class->$method;
                 $self->_add_to_mappings( $m );
+                $m->initialize($self);
             }
         }
     }
@@ -238,6 +240,16 @@ sub register_mapping {
         $self->_add_to_mappings( $opts );
     }
 }
+
+
+sub mappings_complete { # FIXME: this will change later
+    my ($self) = @_;
+    # initialize ALL mappings
+    foreach my $class (keys %{$self->_mappings}) {
+        $self->_mappings->{$class}->initialize($self);
+    }
+    
+} 
 
 
 sub _add_to_mappings {
