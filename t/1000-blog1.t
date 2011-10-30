@@ -124,7 +124,7 @@ my $ds = Ormish::DataStore->new(
     my $b1 = $ds->query('My::Blog')->fetch($blog->id); # by oid
     is $b1, $blog; # string 'eq' comparison
     is refaddr($b1), refaddr($blog);
-    is scalar(@sql), 2; # insert + select
+    is scalar(@sql), 1; # insert only, fetch retrieves from the identitymap
     is Ormish::DataStore::of($b1), $ds;
 
     # update and flush, 
@@ -142,23 +142,26 @@ my $ds = Ormish::DataStore->new(
         is scalar(@affected), 1;
     }
 
+    # quick and dirty insert for now, ideally the dbh should not be shared, to avoid race conditions / conflicts
     DBIx::Simple->new($dbh)->query(q{INSERT INTO blog_blog (b_id,name,title,c_tag_line) VALUES (??)},
         123, 'some-random-blog', 'Some Random Blog', '... nothing here, move along',
         );
 
+    @sql = ();
     my $b2 = $ds->query('My::Blog')->fetch(123);
+    is scalar(@sql), 1;
     isa_ok $b2, 'My::Blog';
     is Ormish::DataStore::of($b2), $ds;
     is $b2->id, 123;
     is $b2->name, 'some-random-blog';
     is $b2->title, 'Some Random Blog';
     is $b2->tagline, '... nothing here, move along';
-    is scalar(@sql), 5;
+    is scalar(@sql), 1;
 
     $ds->add($b2);
-    is scalar(@sql), 5; # no effect, no queries issued
+    is scalar(@sql), 1; # no effect, no queries issued
     $ds->commit;
-    is scalar(@sql), 5; # no effect, no queries issued
+    is scalar(@sql), 1; # no effect, no queries issued
 
     # --- query result
 
@@ -272,18 +275,19 @@ my $ds = Ormish::DataStore->new(
 
     my $b = $ds->query('My::Blog')->fetch(1); # reuse existing
     isa_ok $b, 'My::Blog';
-    is scalar(@sql), 1;
+    is scalar(@sql), 0;
     isa_ok $b->posts, 'Set::Object';
 
     my $fp = My::Post->new( title => 'first post!' ); 
 
     $b->posts->insert( $fp );
-    is scalar(@sql), 1; # lazy insert
+    is scalar(@sql), 0; # lazy insert
 
     $ds->commit;
-    is scalar(@sql), 2; 
+    is scalar(@sql), 1; 
     isnt $fp->id, undef;
     #is $fp->parent_blog, $b;
+
 
 
 }

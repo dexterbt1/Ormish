@@ -190,6 +190,7 @@ sub idmap_get {
         # return cached copy from identity map
         return $ident_of{refaddr($self)}{$class}{$oid_str};
     }
+    return;
 }
 
 sub object_from_hashref {
@@ -242,13 +243,12 @@ sub register_mapping {
 }
 
 
-sub mappings_complete { # FIXME: this will change later
+sub initialize {
     my ($self) = @_;
     # initialize ALL mappings
     foreach my $class (keys %{$self->_mappings}) {
         $self->_mappings->{$class}->initialize($self);
     }
-    
 } 
 
 

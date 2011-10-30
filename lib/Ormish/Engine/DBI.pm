@@ -129,16 +129,29 @@ sub get_object_by_oid {
     my @oid_cols = keys %{$mapping->oid_col_to_attr};
     if (scalar(@oid_cols) == 1) {
         my ($oid_col) = @oid_cols;
+        my $where_attr = { 
+            $mapping->oid_col_to_attr->{$oid_col} => $oid,
+        };
+        my $oid_str = $mapping->oid->as_str($where_attr);
+        my $o;
+        $o = $datastore->idmap_get($mapping, $oid_str);
+        if (defined $o) {
+            return $o;
+        }
+
+        my $where = { 
+            $oid_col => $oid, 
+        };
         my ($stmt, @bind) = $self->sql_abstract->select( 
             -from       => [ $mapping->table ],
-            -where      => { $oid_col => $oid },
+            -where      => $where,
             -limit      => 1, # for now, limit to the first row
         );
         my $r = $self->execute_raw_query([$stmt, \@bind]);
         my $h = $r->hash;
         return if (not defined $h);
 
-        my $o = $datastore->object_from_hashref($mapping, $h);
+        $o = $datastore->object_from_hashref($mapping, $h);
         return $o;
     }
     else {
