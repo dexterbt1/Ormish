@@ -56,12 +56,12 @@ my $ds = Ormish::DataStore->new(
     
     @sql = ();
 
-    $p = $ds->query('Person')->fetch('111-111-1111');
+    $p = $ds->query('Person')->fetch('111-111-1111'); # cached
     is $p, $o;
     $p->name('John X. Doe');
     $ds->commit;
     ($DEBUG) && do { diag Dump(\@sql); };
-    is scalar(@sql), 2;
+    is scalar(@sql), 1;
 
     @sql = ();
 
