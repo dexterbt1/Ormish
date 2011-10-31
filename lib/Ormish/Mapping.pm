@@ -2,12 +2,12 @@ package Ormish::Mapping;
 use Moose;
 use namespace::autoclean;
 
+use Scalar::Util ();
 use Carp ();
 
-has 'datastore'     => (is => 'rw', isa => 'Ormish::DataStore');
-has 'table'         => (is => 'rw', isa => 'Str', required => 1);
-has 'oid'           => (is => 'rw', does => 'Ormish::OID::BaseRole', required => 1);
-has 'for_class'     => (is => 'rw', isa => 'Str', predicate => 'has_for_class');
+has 'table'         => (is => 'ro', isa => 'Str', required => 1);
+has 'oid'           => (is => 'ro', does => 'Ormish::OID::BaseRole', required => 1);
+has 'for_class'     => (is => 'ro', isa => 'Str', predicate => 'has_for_class');
 has 'attributes'    => (is => 'ro', isa => 'ArrayRef', required => 1);
 has 'relations'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
@@ -16,6 +16,8 @@ has '_attr2col'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_col2attr'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_oid_attr2col' => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_oid_col2attr' => (is => 'ro', isa => 'HashRef', default => sub { { } });
+
+has '_reverse_rel'  => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
 
 sub BUILD {
@@ -27,37 +29,13 @@ sub BUILD {
 }
 
 sub initialize {
-    my ($self, $datastore) = @_;
-    $self->datastore($datastore);
-    $self->_setup_attrs;
-    $self->_setup_relations;
-}
-
-sub _setup_relations {
-    my ($self) = @_;
-    my $attr_to_rel_map = $self->relations;
-    my $class = $self->for_class;
-    my $class_meta = $class->meta;
-    foreach my $at (keys %$attr_to_rel_map) {
-        # attribute should exist 
-        $class_meta->has_attribute($at)
-            or Carp::confess('Trying to map relation in non-existent attribute '.$at.' for class '.$class);
-        my $attr = $class_meta->get_attribute($at);
-        $attr->has_type_constraint('Set::Object')
-            or Carp::confess('Unsupported relation type (expects "Set::Object") for attribute '.$at.' class '.$class);
-
-        # look ahead
-        my $rel = $attr_to_rel_map->{$at};
-        my $to_class = $rel->to_class;
-        ($to_class->can('meta'))
-            or Carp::confess("Non-moose class $to_class not supported in a relationship");
-        my $to_class_mapping = $self->datastore->mapping_of_class($to_class);
-        1;
-    }    
+    my ($self, $datastore) = @_; # datastore is needed for resolving other mappings
+    $self->_setup_attrs($datastore);
+    $self->_setup_relations($datastore);
 }
 
 sub _setup_attrs {
-    my ($self) = @_;
+    my ($self, $datastore) = @_;
     my $attr_name_or_aliases = $self->attributes;
     my @attributes = ();
     my %a2c = ();
@@ -67,6 +45,14 @@ sub _setup_attrs {
     my %oid_c2a  = ();
     my %oid_a2c  = ();
     my $class = $self->for_class;
+    # auto 
+    if ($self->oid->install_attributes) {
+        $self->oid->do_install_meta_attributes($class);
+    }
+    foreach my $oid_attr (keys %oid_attrs) {
+        $class->meta->has_attribute($oid_attr)
+            or Carp::confess("Undeclared attribute '$oid_attr' in class '$class'");
+    } 
     foreach my $at (@$attr_name_or_aliases) {
         my ($meth, $col) = split /\|/, $at, 2;
         if (not $col) {
@@ -87,10 +73,6 @@ sub _setup_attrs {
             $oid_a2c{$meth} = $col;
         }
     }
-    map {
-        $class->meta->has_attribute($_)
-            or Carp::confess("Undeclared attribute '$_' in class '$class'");
-    } keys %oid_attrs;
 
     %{$self->_attr2col} = %a2c;
     %{$self->_attr2metaattr} = %a2ma;
@@ -99,6 +81,62 @@ sub _setup_attrs {
     %{$self->_oid_col2attr} = %oid_c2a;
     $self->meta->get_attribute('attributes')->set_raw_value($self, \@attributes);
 }
+
+sub _setup_relations {
+    my ($self, $datastore) = @_;
+    my $attr_to_rel_map = $self->relations;
+    my $class = $self->for_class;
+    my $class_meta = $class->meta;
+    foreach my $at (keys %$attr_to_rel_map) {
+        # attribute should exist 
+        $class_meta->has_attribute($at)
+            or Carp::confess('Trying to map relation in non-existent attribute '.$at.' for class '.$class);
+
+        my $rel = $attr_to_rel_map->{$at};
+
+        my $to_class = $rel->to_class;
+        ($to_class->can('meta'))
+            or Carp::confess("Non-moose class $to_class not supported in a relationship");
+
+        # test attribute
+        $rel->check_supported_type_constraint($class, $at);
+
+        # check that we have a mapping (or auto load)
+        my $reverse_rel = $self->get_reverse_relation_attr_name($datastore, $at);
+        (defined $reverse_rel)
+            or Carp::confess("Expected reverse relation to be declared for relation '$at' in class '$class'");
+
+        1;
+    }    
+}
+
+sub get_reverse_relation_attr_name {
+    my ($self, $datastore, $rel_name) = @_; 
+    #if (exists $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name}) {
+    #    # cache this call (memoize)
+    #    return $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name};
+    #}
+    my $ret;
+    my $rel = $self->relations->{$rel_name};
+    my $to_class = $rel->to_class;
+    my $to_class_mapping = $datastore->mapping_of_class($to_class);
+    my $to_class_relations = $to_class_mapping->relations;
+    my $from_class = $self->for_class;
+    my $found = 0;
+    foreach my $to_class_attr_name (keys %$to_class_relations) {
+        my $to_class_rel = $to_class_relations->{$to_class_attr_name};
+        # TODO: support multiple reverse_rel
+        if ($to_class_rel->to_class eq $from_class) {
+            $found++;
+            $ret = $to_class_attr_name;
+            #$self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name} = $ret;
+        }
+    }
+    ($found < 2) # TODO: support this later
+        or Carp::confess("Ambiguous reverse relation in '$to_class' when resolving '$from_class'");
+    return $ret;
+}
+
 
 sub oid_attr_to_col {
     return $_[0]->_oid_attr2col;
@@ -133,7 +171,7 @@ sub col_to_attr {
 }
 
 sub object_insert_table_rows {
-    my ($self, $obj) = @_;
+    my ($self, $datastore, $obj) = @_;
     my @rows = ();
     {
         my $attr_to_col     = $self->_attr2col;
@@ -144,7 +182,28 @@ sub object_insert_table_rows {
         foreach my $at (keys %$attr_to_col) {
             next if ($oid_is_db_generated && exists($oid_attr_to_col->{$at})); # skip serial/autoincrement oid fields 
             my $col     = $attr_to_col->{$at} || $at;
-            $row{$col}  = $obj->$at();
+            my $attr    = $self->for_class->meta->get_attribute($at);
+            my $v       = $attr->get_value($obj);
+            if (exists $self->relations->{$at}) {
+                if (defined($v) and Scalar::Util::blessed($v)) {
+                    my $fk_mapping = $datastore->mapping_of_class(ref($v));
+                    my $fk_oid_values = $fk_mapping->oid->attr_values($v);
+                    # remap fk oids
+                    # ---
+                    # TODO: support multi-column composite keys
+                    #my %fk_oid_cols = map {  } keys %$fk_oid_values;
+
+                    my %col_to_fk_values = ();
+                    foreach my $col_to_fk_attr_name (split(/,/, $col)) {
+                        my ($c, $fk_attr_name) = split /=/, $col_to_fk_attr_name;
+                        $col_to_fk_values{$c} = $fk_oid_values->{$fk_attr_name};
+                    }
+                    %row = (%row, %col_to_fk_values);
+                }
+            }
+            else {
+                $row{$col}  = $v;
+            }
         }
         # ---
         push @rows, [ \%row, \%where ];
@@ -155,7 +214,7 @@ sub object_insert_table_rows {
 }
 
 sub object_update_table_rows {
-    my ($self, $obj, $obj_oid_attr_values) = @_;
+    my ($self, $datastore, $obj, $obj_oid_attr_values) = @_;
     my @rows = ();
     {
         my $attr_to_col     = $self->_attr2col;
@@ -186,12 +245,15 @@ sub setup_object_relations {
     # assumes obj is persistent and w/ oid
     # assumes obj has the correct $mapping + $datastore already
 
-    # populate relations with proxies
+    # populate relations if necessary
     foreach my $at (keys %{$self->relations}) {
         my $rel     = $self->relations->{$at};
-        my $proxy   = $rel->get_proxy_object( $obj, $self );
         my $attr    = $obj->meta->get_attribute($at);
-        $attr->set_raw_value($obj, $proxy);
+        my $v        = $attr->get_raw_value($obj);
+        if ($rel->requires_proxy) {
+            $v = $rel->get_proxy_object($at, $obj, $self);
+        }
+        $attr->set_raw_value($obj, $v);
     }
 }
 

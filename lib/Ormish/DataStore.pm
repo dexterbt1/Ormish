@@ -95,6 +95,23 @@ sub add {
     # TODO: traverse attributes and relationships ...
 }
 
+
+sub add_dirty {
+    my ($self, $o, $attr_name) = @_;
+    # mark as dirty, save the original oid value
+    my $class   = ref($o) || '';
+    $is_dirty{refaddr($self)}{refaddr($o)} = 1;
+    my $obj_m = $self->mapping_of_class($class);
+    my $oids_before_update = $obj_m->oid->attr_values($o);
+    my $mod_attr = $class->meta->get_attribute($attr_name);
+    my $prev_value = $mod_attr->get_raw_value($o);
+    my $undo_attr_set = sub { 
+        $mod_attr->set_raw_value($o, $prev_value); 
+    };
+    push @{$self->_work_queue}, [ [ 'update_object', $self, $o, $oids_before_update ], [ $undo_attr_set ] ];
+}
+
+
 sub delete {
     my ($self, $obj) = @_;
     (of($obj) eq $self)
@@ -304,15 +321,7 @@ sub _add_to_mappings {
                 if (scalar @_ > 0) {
                     my $st = of($o); 
                     if ($st) {
-                        # mark as dirty, save the original oid value
-                        $is_dirty{refaddr($st)}{refaddr($o)} = 1;
-                        my $obj_m = $st->mapping_of_class($class);
-                        my $oids_before_update = $obj_m->oid->attr_values($o);
-                        my $prev_value = $mod_attr->get_value($o);
-                        my $undo_attr_set = sub { 
-                            $mod_attr->set_raw_value($o, $prev_value); 
-                        };
-                        push @{$st->_work_queue}, [ [ 'update_object', $self, $o, $oids_before_update ], [ $undo_attr_set ] ];
+                        $st->add_dirty($o, $mod_attr->name);
                     }
                 }
             };

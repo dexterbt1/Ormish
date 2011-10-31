@@ -37,10 +37,10 @@ sub insert_object {
 
     my $class = ref($obj) || '';
     my $mapping = $datastore->mapping_of_class($class);
-    my $table_rows = $mapping->object_insert_table_rows($obj);
+    my $table_rows = $mapping->object_insert_table_rows($datastore, $obj);
     foreach my $table (keys %$table_rows) {
-        map {
-            my ($row, $where) = @$_;
+        foreach my $row_spec (@{$table_rows->{$table}}) {
+            my ($row, $where) = @$row_spec;
             my ($stmt, @bind) = $self->sql_abstract->insert( $table, $row );
             $self->execute_raw_query([$stmt, \@bind])->flat; 
             # handle serial pk
@@ -48,11 +48,12 @@ sub insert_object {
             if ($mapping->oid->is_db_generated) {
                 $mapping->oid->set_object_identity( $obj, $auto_id );
             }
-        } @{$table_rows->{$table}};
+        }
     }
     $datastore->idmap_add($mapping, $obj);
     $mapping->setup_object_relations($obj);
 }
+
 
 sub insert_object_undo {
     # nop
@@ -71,7 +72,7 @@ sub update_object {
 
     my $class = ref($obj) || '';
     my $mapping = $datastore->mapping_of_class($class);
-    my $table_rows = $mapping->object_update_table_rows($obj, $oid_attr_values);
+    my $table_rows = $mapping->object_update_table_rows($datastore, $obj, $oid_attr_values);
     foreach my $table (keys %$table_rows) {
         map {
             my ($row, $where) = @$_;
@@ -94,7 +95,7 @@ sub delete_object {
 
     my $class = ref($obj) || '';
     my $mapping = $datastore->mapping_of_class($class);
-    my $table_rows = $mapping->object_update_table_rows($obj, $oid_attr_values);
+    my $table_rows = $mapping->object_update_table_rows($datastore, $obj, $oid_attr_values);
     foreach my $table (keys %$table_rows) {
         map {
             my ($row, $where) = @$_;
