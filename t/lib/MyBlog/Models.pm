@@ -58,4 +58,16 @@
     __PACKAGE__->meta->make_immutable;
 }
 
+package MyBlog::Models;
+use strict;
+
+sub deploy_schema {
+    my ($class, $dbh) = @_;
+    $dbh->do('CREATE TABLE blog_blog (b_id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, c_tag_line VARCHAR)');
+    $dbh->do('CREATE TABLE blog_post (id INTEGER PRIMARY KEY, title VARCHAR, content BLOB, parent_blog_id INTEGER, 
+                FOREIGN KEY (parent_blog_id) REFERENCES blog_blog (b_id))');
+    $dbh->commit;
+}
+
+
 1;

@@ -3,17 +3,13 @@ use Test::More qw/no_plan/;
 use Scalar::Util qw/refaddr/;
 use DBI;
 use DBIx::Simple;
-use YAML;
 use Ormish;
 use FindBin;
 use lib "$FindBin::Bin/lib";
 use MyBlog::Models;
 
 my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
-$dbh->do('CREATE TABLE blog_blog (b_id INTEGER PRIMARY KEY, name VARCHAR, title VARCHAR, c_tag_line VARCHAR)');
-$dbh->do('CREATE TABLE blog_post (id INTEGER PRIMARY KEY, title VARCHAR, content BLOB, parent_blog_id INTEGER, 
-            FOREIGN KEY (parent_blog_id) REFERENCES blog_blog (b_id))');
-$dbh->commit;
+MyBlog::Models->deploy_schema($dbh);
 
 my @sql = ();
 my $ds = Ormish::DataStore->new( 
@@ -234,7 +230,6 @@ my $ds = Ormish::DataStore->new(
     $fp->parent_blog($b2);
     $ds->commit;
     is scalar(@sql), 1;
-    #diag Dump(\@sql);
 
 
 }
