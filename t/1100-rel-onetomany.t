@@ -64,8 +64,11 @@ $ds->register_mapping(
 
 # ---
 {
+    my @albums;
     @sql = ();
     my $mj = Music::Artist->new( name => 'Michael Jackson' );
+
+    # add the parent with child collection
     $mj->albums->insert( 
         Music::Album->new( name => 'Thriller' ),
         Music::Album->new( name => 'Off The Wall' ),
@@ -74,10 +77,44 @@ $ds->register_mapping(
     $ds->commit;
     is scalar(@sql), 3;
 
+    # as a set object
     @sql = ();
-    my @albums = $mj->albums->members;
+    @albums = $mj->albums->members;
     is scalar(@albums), 2;
+    is scalar(@sql), 1;
     ok 1;
+
+    ## TODO: overloaded
+    #@sql = ();
+    #@albums = @{$mj->albums};
+    #is scalar(@albums), 2;
+    #is scalar(@sql), 1;
+    #ok 1;
+
+    # add another, this time via the child relation
+    @sql = ();
+    my $pop = Music::Album->new( name => 'Pipes Of Peaces', artist => $mj );
+    $ds->add($pop);
+    $ds->commit;
+    is scalar(@sql), 1;
+
+    # change artist
+    @sql = ();
+    $pop->artist( Music::Artist->new( name => 'Paul McCartney' ) ); # tricky, should be insert artist + update album
+    $ds->commit;
+    is $pop->artist->name, 'Paul McCartney';
+    ok defined $pop->id;
+    ok defined $pop->artist->id;
+    is scalar(@sql), 2;
+    @albums = $pop->artist->albums->members;
+    is scalar(@albums), 1;
+
+    # reverse, add child with parent
+
+    # change the whole collection
+
+    # DELETE from collection
+    
 }
 
 

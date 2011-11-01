@@ -257,8 +257,24 @@ sub object_update_table_rows {
         my %row = ();
         foreach my $at (keys %$attr_to_col) {
             next if ($oid_is_db_generated && exists($oid_attr_to_col->{$at})); # skip serial/autoincrement oid fields 
+
             my $col     = $attr_to_col->{$at} || $at;
-            $row{$col}  = $obj->$at();
+            my $attr    = $self->for_class->meta->get_attribute($at);
+            my $v       = $attr->get_value($obj);
+            if (exists $self->relations->{$at}) {
+                # collapse objects into their oids
+                my $fk_mapping      = $datastore->mapping_of_class(ref($v));
+                my $fk_oid_values   = $fk_mapping->oid->attr_values($v);
+                my %col_to_fk_values = ();
+                foreach my $col_to_fk_attr_name (split(/,/, $col)) {
+                    my ($c, $fk_attr_name) = split /=/, $col_to_fk_attr_name;
+                    $col_to_fk_values{$c} = $fk_oid_values->{$fk_attr_name};
+                }
+                %row = (%row, %col_to_fk_values);
+            }
+            else {
+                $row{$col}  = $v;
+            }
         }
         my %where = ();
         foreach my $oid_attr (keys %$obj_oid_attr_values) {

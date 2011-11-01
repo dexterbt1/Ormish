@@ -322,7 +322,11 @@ sub _add_to_mappings {
                 my $o = shift @_;
                 if (scalar @_ > 0) {
                     my $st = Ormish::DataStore::of($o); 
+                    my $new_val = $_[0];
                     if ($st) {
+                        if (Scalar::Util::blessed($new_val)) {
+                            $st->add($new_val);
+                        }
                         $st->add_dirty($o, $mod_attr->name);
                     }
                 }

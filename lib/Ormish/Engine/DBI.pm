@@ -50,6 +50,7 @@ sub insert_object {
             }
         }
     }
+    $datastore->clean_dirty_obj($obj);
     $datastore->idmap_add($mapping, $obj);
     $mapping->setup_related_collections($datastore, $obj);
 }
