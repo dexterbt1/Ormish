@@ -209,7 +209,7 @@ my $ds = Ormish::DataStore->new(
     # --- relation tests
     @sql = ();
 
-    my $b = $ds->query('My::Blog')->fetch(1); # reuse existing
+    my $b = $ds->query('My::Blog')->fetch(1); # reuse existing, should have been cached as the ds is not yet dead
     isa_ok $b, 'My::Blog';
     is scalar(@sql), 0;
     isa_ok $b->posts, 'Set::Object';

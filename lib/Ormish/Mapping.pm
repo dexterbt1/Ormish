@@ -17,7 +17,8 @@ has '_col2attr'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_oid_attr2col' => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_oid_col2attr' => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
-has '_reverse_rel'  => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has '_related_classes'  => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has '_reverse_rel'      => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
 
 sub BUILD {
@@ -100,11 +101,12 @@ sub _setup_relations {
 
         # test attribute
         $rel->check_supported_type_constraint($class, $at);
+        $self->_related_classes->{$to_class} = 1;
 
         # check that we have a mapping (or auto load)
-        my $reverse_rel = $self->get_reverse_relation_attr_name($datastore, $at);
-        (defined $reverse_rel)
-            or Carp::confess("Expected reverse relation to be declared for relation '$at' in class '$class'");
+        #my $reverse_rel = $self->get_reverse_relation_attr_name($datastore, $at);
+        #(defined $reverse_rel)
+        #    or Carp::confess("Expected reverse relation to be declared for relation '$at' in class '$class'");
 
         1;
     }    
@@ -135,6 +137,11 @@ sub get_reverse_relation_attr_name {
     ($found < 2) # TODO: support this later
         or Carp::confess("Ambiguous reverse relation in '$to_class' when resolving '$from_class'");
     return $ret;
+}
+
+sub get_related_classes {
+    my ($self) = @_;
+    return keys %{$self->_related_classes};
 }
 
 

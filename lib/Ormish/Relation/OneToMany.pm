@@ -41,7 +41,7 @@ __PACKAGE__->meta->make_immutable;
     extends 'Set::Object';
 
     has '_attr_name'        => (is => 'rw', isa => 'Str');
-    has '_object'           => (is => 'rw', isa => 'Object');
+    has '_object'           => (is => 'rw', isa => 'Object', weak_ref => 1);
     has '_object_mapping'   => (is => 'rw', isa => 'Ormish::Mapping');
     has '_relation'         => (is => 'rw', does => 'Ormish::Relation::Role');
 

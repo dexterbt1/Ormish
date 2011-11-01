@@ -14,6 +14,7 @@ has 'auto_register'         => (is => 'ro', isa => 'Bool', default => sub { 0 })
 has 'auto_register_method'  => (is => 'rw', isa => 'Str', default => sub { '_ORMISH_MAPPING' } );
 has 'debug_log'             => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
 
+has '_mappings_complete'    => (is => 'rw', isa => 'Bool', default => 0);
 has '_mappings'             => (is => 'ro', isa => 'HashRef[Str]', default => sub { { } });
 has '_work_queue'           => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
 has '_work_flushed'         => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
@@ -59,6 +60,8 @@ sub unbind_object { # --- Function
     my $obj_addr = refaddr($obj);
     delete $store_of{$obj_addr};
 }
+
+# --- 
 
 sub add {
     my ($self, $obj) = @_;
@@ -197,7 +200,7 @@ sub idmap_add {
         or Carp::confess("Cannot manage object without identity yet");
     # datastore -> class -> obj_oid = obj
     $ident_of{refaddr($self)}{$obj_class}{$obj_oid} = $obj;
-    weaken $ident_of{refaddr($self)}{$obj_class}{$obj_oid};
+    #weaken $ident_of{refaddr($self)}{$obj_class}{$obj_oid};
 }
 
 sub idmap_get {
@@ -231,13 +234,23 @@ sub object_from_hashref {
 
 sub mapping_of_class {
     my ($self, $class) = @_;
+    # call mapping_of_class() signifies that we are ready to use the datastore
+    # given this, we check for completeness of all loaded classes
+    if (not $self->_mappings_complete) {
+        my @required_classes = map { $_->for_class, $_->get_related_classes } values %{$self->_mappings};
+        foreach my $rc (@required_classes) {
+            (exists $self->_mappings->{$rc})
+                or Carp::confess("Mapping not loaded for class '$rc'");
+        }
+        $self->_mappings_complete(1);
+    }
+    
     if ($self->auto_register) {
         if (! exists $self->_mappings->{$class}) {
             my $method = $self->auto_register_method;
             if ($class->can($method)) {
                 my $m = $class->$method;
                 $self->_add_to_mappings( $m );
-                $m->initialize($self);
             }
         }
     }
@@ -260,15 +273,6 @@ sub register_mapping {
 }
 
 
-sub initialize {
-    my ($self) = @_;
-    # initialize ALL mappings
-    foreach my $class (keys %{$self->_mappings}) {
-        $self->_mappings->{$class}->initialize($self);
-    }
-} 
-
-
 sub _add_to_mappings {
     my ($self, $m) = @_;
     ($m->has_for_class)
@@ -278,8 +282,11 @@ sub _add_to_mappings {
     # FIXME: validate oid
     # FIXME: validate attributes
     # FIXME: validate relations
-
     # FIXME: check conflicts / integrity with other classes
+
+    (not exists $self->_mappings->{$class})
+        or Carp::confess("Mapping for class '$class' already exists in datastore");
+
     $self->_mappings->{$class} = $m;
     # ---
     # NOTE: this is invasive, so make this generic and a one time thing
@@ -290,11 +297,12 @@ sub _add_to_mappings {
             my $st = of($o); 
             if ($st) {
                 # delete in identity map of its datastore, if necessary
-                my $obj_m = $st->mapping_of_class($class);
-                my $obj_oid = $obj_m->oid->as_str( $o );
-                if (defined $obj_oid) { 
-                    delete $ident_of{refaddr($st)}{$class}{$obj_oid};
-                }
+                #my $obj_m = $st->mapping_of_class($class);
+                #my $obj_oid = $obj_m->oid->as_str( $o );
+                #if (defined $obj_oid) { 
+                #    delete $ident_of{refaddr($st)}{$class}{$obj_oid};
+                #}
+                #print STDERR "DEMOLISH: $o";
                 # delete store mapping
                 unbind_object($o);
                 delete $is_dirty{refaddr($st)}{refaddr($o)};
@@ -319,7 +327,7 @@ sub _add_to_mappings {
             return sub {
                 my $o = shift @_;
                 if (scalar @_ > 0) {
-                    my $st = of($o); 
+                    my $st = Ormish::DataStore::of($o); 
                     if ($st) {
                         $st->add_dirty($o, $mod_attr->name);
                     }
@@ -337,6 +345,7 @@ sub _add_to_mappings {
         if ($meta_was_immutable) {
             $metaclass->make_immutable;
         }
+        $m->initialize($self);
     }
 }
 
