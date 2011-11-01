@@ -356,7 +356,7 @@ sub _add_class_hooks {
             my ($attr_name) = @_;
             my $attr = $metaclass->get_attribute($attr_name);
             my $writer_name = $attr->writer || $attr->accessor;
-            next if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
+            return if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
             $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty->($attr) );
         });
 
@@ -364,7 +364,7 @@ sub _add_class_hooks {
         $m->meta_traverse_relations($class, sub {
             my ($rel, $rel_at, $rel_attr) = @_;
             my $writer_name = $rel_attr->writer || $rel_attr->accessor;
-            next if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
+            return if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
             $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty->($rel_attr) );
         });
 
