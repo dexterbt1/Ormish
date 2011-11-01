@@ -17,13 +17,10 @@ sub _build_object_tree {
     my $datastore   = $self->query->datastore;
     my $class_to_mapping = $self->cache_mapping;
     while (my $row = $self->next_row) { # TODO: possible fragile base class
-        # for now, build only 1 class 
-
-        # TODO: build the actual tree, including relations
         my ($class, $table, $alias) = @{$self->cache_result_cta};
 
         my $mapping = $class_to_mapping->{$class};
-        my $o       = $datastore->object_from_hashref($mapping, $row);
+        my $o       = $datastore->object_from_hashref($mapping, $row); # deep
         my $oid_str = $mapping->oid->as_str($o);
 
         $map_class_oid{$class}{$oid_str} = $o;

@@ -14,11 +14,12 @@ has 'auto_register'         => (is => 'ro', isa => 'Bool', default => sub { 0 })
 has 'auto_register_method'  => (is => 'rw', isa => 'Str', default => sub { '_ORMISH_MAPPING' } );
 has 'debug_log'             => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
 
-has '_mappings_complete'    => (is => 'rw', isa => 'Bool', default => 0);
 has '_mappings'             => (is => 'ro', isa => 'HashRef[Str]', default => sub { { } });
 has '_work_queue'           => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
 has '_work_flushed'         => (is => 'ro', isa => 'ArrayRef', default => sub { [] } );
 
+has '_pending_init'         => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has '_init_ok'              => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
 
 
@@ -215,7 +216,7 @@ sub idmap_get {
 
 sub object_from_hashref {
     my ($self, $mapping, $h) = @_;
-    my $tmp_o       = $mapping->new_object_from_hashref($h);
+    my $tmp_o       = $mapping->new_object_from_hashref($self, $h); # intimate exchange
     my $oid_str     = $mapping->oid->as_str($tmp_o);
     my $o = $self->idmap_get($mapping, $oid_str);
     if ($o) {
@@ -224,7 +225,7 @@ sub object_from_hashref {
     }
     Ormish::DataStore::bind_object($tmp_o, $self);
     $self->idmap_add($mapping, $tmp_o);
-    $mapping->setup_object_relations($tmp_o);    
+    $mapping->setup_related_collections($self, $tmp_o);    
     return $tmp_o;
 }
 
@@ -234,15 +235,15 @@ sub object_from_hashref {
 
 sub mapping_of_class {
     my ($self, $class) = @_;
-    # call mapping_of_class() signifies that we are ready to use the datastore
-    # given this, we check for completeness of all loaded classes
-    if (not $self->_mappings_complete) {
-        my @required_classes = map { $_->for_class, $_->get_related_classes } values %{$self->_mappings};
-        foreach my $rc (@required_classes) {
-            (exists $self->_mappings->{$rc})
-                or Carp::confess("Mapping not loaded for class '$rc'");
+    if (scalar keys %{$self->_pending_init} > 0) {
+        # lazy initialization of mapped classes
+        foreach my $rc (keys %{$self->_pending_init}) {
+            delete $self->_pending_init->{$rc};
+            next if (exists $self->_init_ok->{$rc}); # prevent deep recursion
+            my $m = $self->_mappings->{$rc};
+            $m->initialize($self);
+            $self->_init_ok->{$rc} = 1;
         }
-        $self->_mappings_complete(1);
     }
     
     if ($self->auto_register) {
@@ -296,13 +297,6 @@ sub _add_to_mappings {
             my ($o) = @_;
             my $st = of($o); 
             if ($st) {
-                # delete in identity map of its datastore, if necessary
-                #my $obj_m = $st->mapping_of_class($class);
-                #my $obj_oid = $obj_m->oid->as_str( $o );
-                #if (defined $obj_oid) { 
-                #    delete $ident_of{refaddr($st)}{$class}{$obj_oid};
-                #}
-                #print STDERR "DEMOLISH: $o";
                 # delete store mapping
                 unbind_object($o);
                 delete $is_dirty{refaddr($st)}{refaddr($o)};
@@ -345,7 +339,7 @@ sub _add_to_mappings {
         if ($meta_was_immutable) {
             $metaclass->make_immutable;
         }
-        $m->initialize($self);
+        $self->_pending_init->{$class} = 1;
     }
 }
 

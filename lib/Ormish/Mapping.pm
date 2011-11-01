@@ -11,13 +11,11 @@ has 'for_class'     => (is => 'ro', isa => 'Str', predicate => 'has_for_class');
 has 'attributes'    => (is => 'ro', isa => 'ArrayRef', required => 1);
 has 'relations'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
-has '_attr2metaattr' => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_attr2col'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_col2attr'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_oid_attr2col' => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_oid_col2attr' => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
-has '_related_classes'  => (is => 'ro', isa => 'HashRef', default => sub { { } });
 has '_reverse_rel'      => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
 
@@ -42,14 +40,16 @@ sub _setup_attrs {
     my %a2c = ();
     my %a2ma = ();
     my %c2a = ();
-    my %oid_attrs = map { $_ => 1 } $self->oid->get_attributes;
     my %oid_c2a  = ();
     my %oid_a2c  = ();
-    my $class = $self->for_class;
+
     # auto 
+    my $class = $self->for_class;
     if ($self->oid->install_attributes) {
         $self->oid->do_install_meta_attributes($class);
     }
+
+    my %oid_attrs = map { $_ => 1 } $self->oid->get_attributes;
     foreach my $oid_attr (keys %oid_attrs) {
         $class->meta->has_attribute($oid_attr)
             or Carp::confess("Undeclared attribute '$oid_attr' in class '$class'");
@@ -64,8 +64,6 @@ sub _setup_attrs {
         $class_meta->has_attribute($meth)
             or Carp::confess("Undeclared attribute '$meth' in class '$class'");
 
-        $a2ma{$meth} = $class_meta->get_attribute($meth);
-
         push @attributes, $meth;
         $a2c{$meth} = $col;
         $c2a{$col}  = $meth;
@@ -75,8 +73,22 @@ sub _setup_attrs {
         }
     }
 
+    # include auto-installed oid attrs
+    if ($self->oid->install_attributes) {
+        foreach my $oid_at (keys %oid_attrs) {
+            # FIXME: support custom columns for auto-installed attributes
+            if (!exists $oid_a2c{$oid_at}) {
+                $oid_a2c{$oid_at}   = $oid_at;
+                $oid_c2a{$oid_at}   = $oid_at;
+            }
+            if (!exists $a2c{$oid_at}) {
+                $a2c{$oid_at}       = $oid_at;
+                $c2a{$oid_at}       = $oid_at;
+            }
+        }
+    }
+
     %{$self->_attr2col} = %a2c;
-    %{$self->_attr2metaattr} = %a2ma;
     %{$self->_col2attr} = %c2a;
     %{$self->_oid_attr2col} = %oid_a2c;
     %{$self->_oid_col2attr} = %oid_c2a;
@@ -101,23 +113,21 @@ sub _setup_relations {
 
         # test attribute
         $rel->check_supported_type_constraint($class, $at);
-        $self->_related_classes->{$to_class} = 1;
 
-        # check that we have a mapping (or auto load)
-        #my $reverse_rel = $self->get_reverse_relation_attr_name($datastore, $at);
-        #(defined $reverse_rel)
-        #    or Carp::confess("Expected reverse relation to be declared for relation '$at' in class '$class'");
-
-        1;
+        # check presence of reverse relation
+        my $reverse_rel = $self->get_reverse_relation_info($datastore, $at);
+        (defined $reverse_rel)
+            or Carp::confess("Expected reverse relation to be declared for relation '$at' in class '$class'");
     }    
 }
 
-sub get_reverse_relation_attr_name {
+
+sub get_reverse_relation_info {
     my ($self, $datastore, $rel_name) = @_; 
-    #if (exists $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name}) {
-    #    # cache this call (memoize)
-    #    return $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name};
-    #}
+    if (exists $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name}) {
+        # cache this call (memoize)
+        return $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name};
+    }
     my $ret;
     my $rel = $self->relations->{$rel_name};
     my $to_class = $rel->to_class;
@@ -130,18 +140,17 @@ sub get_reverse_relation_attr_name {
         # TODO: support multiple reverse_rel
         if ($to_class_rel->to_class eq $from_class) {
             $found++;
-            $ret = $to_class_attr_name;
-            #$self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name} = $ret;
+            $ret = { 
+                rel             => $to_class_rel, 
+                attr_name       => $to_class_attr_name,
+                mapping         => $to_class_mapping,
+            };
+            $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name} = $ret;
         }
     }
     ($found < 2) # TODO: support this later
         or Carp::confess("Ambiguous reverse relation in '$to_class' when resolving '$from_class'");
     return $ret;
-}
-
-sub get_related_classes {
-    my ($self) = @_;
-    return keys %{$self->_related_classes};
 }
 
 
@@ -176,6 +185,24 @@ sub col_to_attr {
     }
     return \%h;
 }
+
+sub related_object_oid_col_values {
+    my ($self, $datastore, $relation_name, $rel_obj) = @_;
+    my $rel             = $self->relations->{$relation_name};
+    my $rel_class       = $rel->to_class;
+    my $fk_mapping      = $datastore->mapping_of_class($rel_class);
+    my $fk_oid_values   = $fk_mapping->oid->attr_values($rel_obj);
+    my $attr_to_col     = $self->_attr2col;
+    my $col             = $attr_to_col->{$relation_name};
+
+    my %col_to_fk_values = ();
+    foreach my $col_to_fk_attr_name (split(/,/, $col)) {
+        my ($c, $fk_attr_name) = split /=/, $col_to_fk_attr_name;
+        $col_to_fk_values{$c} = $fk_oid_values->{$fk_attr_name};
+    }
+    return \%col_to_fk_values;
+}
+
 
 sub object_insert_table_rows {
     my ($self, $datastore, $obj) = @_;
@@ -247,8 +274,8 @@ sub object_update_table_rows {
 }
 
 
-sub setup_object_relations {
-    my ($self, $obj) = @_;
+sub setup_related_collections {
+    my ($self, $datastore, $obj) = @_;
     # assumes obj is persistent and w/ oid
     # assumes obj has the correct $mapping + $datastore already
 
@@ -257,8 +284,8 @@ sub setup_object_relations {
         my $rel     = $self->relations->{$at};
         my $attr    = $obj->meta->get_attribute($at);
         my $v        = $attr->get_raw_value($obj);
-        if ($rel->requires_proxy) {
-            $v = $rel->get_proxy_object($at, $obj, $self);
+        if ($rel->is_collection) {
+            $v = $rel->get_proxy($datastore, $at, $obj, $self);
         }
         $attr->set_raw_value($obj, $v);
     }
@@ -266,23 +293,52 @@ sub setup_object_relations {
 
 
 sub new_object_from_hashref {
-    my ($self, $h) = @_;
+    my ($self, $datastore, $h) = @_;
     my $obj_class   = $self->for_class;
     my $c2a         = $self->col_to_attr;
-    my %oh          = map { 
-        $c2a->{$_} => $h->{$_} 
-    } keys %$h;
+    my $a2rel       = $self->relations;
+    my %oh = ();
+    # build primitive types
+    foreach my $col (keys %$h) { 
+        next if (not exists $c2a->{$col});
+        my $attr = $c2a->{$col};
+        next if (exists $a2rel->{$attr}); # skip related objects
+        my $value = $h->{$col};
+        $oh{$attr} = $value;
+    }
+
+    # build related non-collection objects
+    foreach my $rel_at (keys %$a2rel) {
+        my $rel         = $a2rel->{$rel_at};
+        next if ($rel->is_collection);
+        my $col_spec    = $self->attr_to_col->{$rel_at};
+        my $rel_class   = $rel->to_class;
+        my $rel_meta    = $rel_class->meta;
+        my %fk_oh = ();
+        foreach my $col_to_fk_attr_name (split(/,/, $col_spec)) {
+            my ($c, $fk_attr_name) = split /=/, $col_to_fk_attr_name;
+            $fk_oh{$fk_attr_name} = $h->{$c};
+        }
+        # build proxy
+        my $rel_mapping = $datastore->mapping_of_class($rel_class);
+        my $proxy = $rel->get_proxy($datastore, $rel_at, \%fk_oh, $rel_mapping);
+        $oh{$rel_at} = $proxy;
+    }
 
     # exclude non-required columns that are undefined
     my %oh_nulls    = ();
+    my $metaclass   = $obj_class->meta;
     foreach my $at (keys %oh) {
-        my $attr = $self->_attr2metaattr->{$at};
+        my $attr = $metaclass->get_attribute($at);
         if (not($attr->is_required) and (not defined $oh{$at})) {
             $oh_nulls{$at} = delete $oh{$at};
         }
     }
     
-    my $tmp_o       = $obj_class->new(%oh);
+    # FIXME:    for now, bypass Moose construction, 
+    #           the reason being that the data is from the database, 
+    #           assumed to have been validated and sanitized already
+    my $tmp_o       = bless \%oh, $obj_class;
     return $tmp_o;
 }
 

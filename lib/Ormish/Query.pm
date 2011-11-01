@@ -5,12 +5,14 @@ use namespace::autoclean;
 use Carp ();
 
 has 'datastore'         => (is => 'ro', isa => 'Ormish::DataStore', required => 1);
+
 has 'result_types'      => (is => 'rw', isa => 'ArrayRef[Str]', trigger => sub { $_[0]->_build_meta_result });
 
 has '_meta_result_qkv'  => (is => 'rw', isa => 'HashRef');
 has '_meta_result_cta'  => (is => 'rw', isa => 'ArrayRef');
-has '_filter_cond'      => (is => 'rw', isa => 'ArrayRef');
-has '_filter_static'    => (is => 'rw', isa => 'ArrayRef');
+
+has 'filter_cond'       => (is => 'rw', isa => 'ArrayRef', reader => 'meta_filter_condition');
+has 'filter_static'     => (is => 'rw', isa => 'ArrayRef', reader => 'meta_filter_static');
 
 
 sub meta_result_cta {
@@ -97,12 +99,6 @@ sub interpolate_result_qkv {
 }
 
 
-sub meta_filter_condition {
-    my ($self) = @_;
-    return $self->_filter_cond;
-}
-
-
 sub fetch {
     my ($self, $oid) = @_;
     $self->datastore->flush;
@@ -129,7 +125,13 @@ sub select_rows {
 
 sub where {
     my $self = shift @_;
-    $self->_filter_cond(\@_);
+    $self->filter_cond(\@_);
+    return $self;
+}
+
+sub static_where {
+    my $self = shift @_;
+    $self->filter_static(\@_);
     return $self;
 }
 

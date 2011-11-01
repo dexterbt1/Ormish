@@ -22,7 +22,7 @@ has 'dbh'           => (is          => 'ro',
 has 'dbixs'         => (is => 'rw', isa => 'DBIx::Simple', lazy => 1, default => sub { DBIx::Simple->new($_[0]->dbh) });
 
 has 'log_sql'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
-has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new(case => 'lower') });
+has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub { SQL::Abstract::More->new });
 
 
 # TODO: how do we handle multi-table inheritance
@@ -51,7 +51,7 @@ sub insert_object {
         }
     }
     $datastore->idmap_add($mapping, $obj);
-    $mapping->setup_object_relations($obj);
+    $mapping->setup_related_collections($datastore, $obj);
 }
 
 
@@ -128,11 +128,14 @@ sub get_object_by_oid {
     my $db = $self->dbixs;
     my $mapping = $datastore->mapping_of_class($class);
     my @oid_cols = keys %{$mapping->oid_col_to_attr};
-    if (scalar(@oid_cols) == 1) {
+    {
         my ($oid_col) = @oid_cols;
         my $where_attr = { 
             $mapping->oid_col_to_attr->{$oid_col} => $oid,
         };
+        if (ref($oid) eq 'HASH') {
+            $where_attr = $oid;
+        }
         my $oid_str = $mapping->oid->as_str($where_attr);
         my $o;
         $o = $datastore->idmap_get($mapping, $oid_str);
@@ -154,9 +157,6 @@ sub get_object_by_oid {
 
         $o = $datastore->object_from_hashref($mapping, $h);
         return $o;
-    }
-    else {
-        Carp::confess("Multi-column primary keys are not yet supported.");
     }
 }
 
@@ -208,13 +208,39 @@ sub _build_select {
                 if (ref($sql_where) eq 'HASH') {
                     ($sql_where, @sql_where_bind) = $self->sql_abstract->where($sql_where);
                 }
-                else {
-                    $sql_where = 'where '.$sql_where;
-                }
+                $sql_where =~ s[^\s*WHERE\s*][]i;
             }
             else {
                 Carp::croak("Unsupported \$query->where() type");
             }
+        }
+
+        my $static_spec = $query->meta_filter_static;
+        my ($static_where, @static_where_bind) = ('', );
+        if ($static_spec) {
+            if (ref($static_spec) eq 'ARRAY') {
+                ($static_where, @static_where_bind) = @$static_spec;
+                if (ref($static_where) eq 'HASH') {
+                    ($static_where, @static_where_bind) = $self->sql_abstract->where($static_where);
+                }
+                $static_where =~ s[^\s*WHERE\s*][]i;
+            }
+            else {
+                Carp::croak("Unsupported \$query->meta_filter_static() type");
+            }
+            # attach to where + bind
+            if (length($sql_where) > 0) {
+                my @all_cond = ($sql_where, $static_where);
+                $sql_where = join(' AND ', map { '('.$_.')' } @all_cond );
+            }
+            else {
+                $sql_where = $static_where;
+            }
+            @sql_where_bind = (@sql_where_bind, @static_where_bind);
+        }
+
+        if (length($sql_where) > 0) {
+            $sql_where = 'WHERE '.$sql_where;
         }
 
         my $tmp_stmt = join(' ', $sql_sel, $sql_where ); # more SQL syntax later

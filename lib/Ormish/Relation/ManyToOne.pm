@@ -10,18 +10,20 @@ sub check_supported_type_constraint { # TODO
     # nop for now
 }
 
-sub get_proxy_object {
-    my ($self, $attr_name, $obj, $obj_mapping) = @_;
+sub get_proxy {
+    my ($self, $datastore, $attr_name, $obj, $obj_mapping) = @_;
     my $t = Scalar::Util::refaddr($obj);
     my $proxy = tie $t, 'Ormish::Relation::ManyToOne::TiedObjectProxy', {
-        _attr_name        => $attr_name,
-        _object           => $obj,
-        _object_mapping   => $obj_mapping,
+        _attr_name          => $attr_name,
+        _object             => $obj,
+        _object_mapping     => $obj_mapping,
+        _datastore          => $datastore,
+        _relation           => $self,
     };
-    return $t;
+    return $proxy;
 }
 
-sub requires_proxy { 0 }
+sub is_collection { 0 }
 
 1;
 
@@ -32,14 +34,18 @@ __PACKAGE__->meta->make_immutable;
 {
     package Ormish::Relation::ManyToOne::TiedObjectProxy;
     use Moose;
-    use namespace::autoclean;
+    use MooseX::InsideOut;
     use Carp ();
+    use Scalar::Util ();
+
+    with 'Ormish::Relation::Proxy::Role';
 
     has '_attr_name'        => (is => 'rw', isa => 'Str');
-    has '_target_obj'       => (is => 'rw', isa => 'Object|Undef', weak_ref => 1);
-    has '_object'           => (is => 'rw', isa => 'Object', weak_ref => 1);
+    has '_object'           => (is => 'rw', isa => 'Object|HashRef', weak_ref => 1); # in ManyToOne, this is the ONE part
     has '_object_mapping'   => (is => 'rw', isa => 'Ormish::Mapping');
     has '_relation'         => (is => 'rw', does => 'Ormish::Relation::Role');
+    has '_datastore'        => (is => 'rw', isa => 'Ormish::DataStore', weak_ref => 1);
+    has '_cached_object'    => (is => 'rw', isa => 'Object', weak_ref => 1, predicate => '_has_cached_object');
 
     sub TIESCALAR {
         my ($class, $opts) = @_;
@@ -48,12 +54,22 @@ __PACKAGE__->meta->make_immutable;
 
     sub FETCH {
         my ($self) = @_;
-        return $self->_target_obj;
+        my $ds = $self->_datastore;
+        my $o = $self->_object;
+        if (Scalar::Util::blessed($o)) {
+            return $o;
+        }
+        # here, $o becomes the oid_attr_values
+        if ($self->_has_cached_object) {
+            return $self->_cached_object;
+        }
+        my $spec = $o;
+        my $out = $ds->query($self->_relation->to_class)->fetch($spec);
+        return $out;
     }
 
     sub STORE {
-        my ($self, $target) = @_;
-        $self->_target_obj($target); 
+        Carp::confess("ASSERT: Readonly proxy cannot be altered");
     }
 
 

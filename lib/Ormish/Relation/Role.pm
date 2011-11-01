@@ -1,14 +1,20 @@
-package Ormish::Relation::Role;
-use Moose::Role;
+{
+    package Ormish::Relation::Role;
+    use Moose::Role;
 
-has 'to_class'      => (is => 'ro', isa => 'Str', required => 1);
+    has 'to_class'      => (is => 'ro', isa => 'Str', required => 1);
 
-requires 'requires_proxy';
+    requires 'is_collection';
 
-requires 'get_proxy_object';
+    requires 'get_proxy';
 
-requires 'check_supported_type_constraint';
+    requires 'check_supported_type_constraint';
+}
+{
+    package Ormish::Relation::Proxy::Role;
+    use Moose::Role;
 
+}
 
 1;
 
