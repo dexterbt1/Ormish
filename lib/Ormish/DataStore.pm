@@ -83,8 +83,9 @@ sub add {
         my $undo_insert = sub {
             unbind_object( $obj );
         };
-        $mapping->traverse_relations($obj, sub {
-            my ($o, $rel_o, $rel_attr_name, $rel) = @_;
+        $mapping->meta_traverse_relations($class, sub {
+            my ($rel, $rel_attr_name, $rel_attr) = @_;
+            my $rel_o = $rel_attr->get_raw_value($obj);
             return if (not defined $rel_o);
             if ($rel->is_collection) {
                 # TODO: adding of collections is not supported yet
@@ -250,6 +251,7 @@ sub mapping_of_class {
             next if (exists $self->_init_ok->{$rc}); # prevent deep recursion
             my $m = $self->_mappings->{$rc};
             $m->initialize($self);
+            $self->_add_class_hooks($m);
             $self->_init_ok->{$rc} = 1;
         }
     }
@@ -264,7 +266,7 @@ sub mapping_of_class {
         }
     }
     (exists $self->_mappings->{$class})
-        or Carp::croak("Unable to find mapping for class: $class");
+        or Carp::confess("Unable to find mapping for class: $class");
     return $self->_mappings->{$class};
 }
 
@@ -297,6 +299,14 @@ sub _add_to_mappings {
         or Carp::confess("Mapping for class '$class' already exists in datastore");
 
     $self->_mappings->{$class} = $m;
+    $self->_pending_init->{$class} = 1;
+}
+
+
+sub _add_class_hooks {
+    my ($self, $mapping) = @_;
+    my $m = $mapping;
+    my $class = $m->for_class;
     # ---
     # NOTE: this is invasive, so make this generic and a one time thing
     if (not exists $classes_with_hooks{$class}) {
@@ -331,7 +341,9 @@ sub _add_to_mappings {
                 if (scalar @_ > 0) {
                     my $st = Ormish::DataStore::of($o); 
                     my $new_val = $_[0];
+                    my $old_val = $mod_attr->get_raw_value($o);
                     if ($st) {
+                        # TODO: handle collections
                         if (Scalar::Util::blessed($new_val)) {
                             $st->add($new_val);
                         }
@@ -340,18 +352,28 @@ sub _add_to_mappings {
                 }
             };
         };
-        foreach my $attr ($metaclass->get_all_attributes) {
+        $m->meta_traverse_simple_persistent_attributes(sub {
+            my ($attr_name) = @_;
+            my $attr = $metaclass->get_attribute($attr_name);
             my $writer_name = $attr->writer || $attr->accessor;
             next if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
             $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty->($attr) );
-        }
+        });
+
+        # TODO: for now, treat just like any other simple persistent attribute
+        $m->meta_traverse_relations($class, sub {
+            my ($rel, $rel_at, $rel_attr) = @_;
+            my $writer_name = $rel_attr->writer || $rel_attr->accessor;
+            next if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
+            $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty->($rel_attr) );
+        });
+
 
         $classes_with_hooks{$class} = 1;
 
         if ($meta_was_immutable) {
             $metaclass->make_immutable;
         }
-        $self->_pending_init->{$class} = 1;
     }
 }
 

@@ -308,13 +308,22 @@ sub setup_related_collections {
 }
 
 
-sub traverse_relations {
-    my ($self, $obj, $callback) = @_;
-    foreach my $rel_at (keys %{$self->relations}) {
-        my $rel = $self->relations->{$rel_at};
-        my $attr = $obj->meta->get_attribute($rel_at);
-        my $v = $attr->get_raw_value($obj);
-        $callback->($obj, $v, $rel_at, $rel);
+sub meta_traverse_simple_persistent_attributes {
+    my ($self, $callback) = @_;
+    my $relations = $self->relations;
+    foreach my $attr_name (keys %{$self->attr_to_col}) {
+        next if (exists $relations->{$attr_name}); # skip relations
+        $callback->($attr_name);
+    }
+}
+
+sub meta_traverse_relations {
+    my ($self, $class, $callback) = @_;
+    my $relations = $self->relations;
+    foreach my $rel_at (keys %$relations) {
+        my $rel_attr = $class->meta->get_attribute($rel_at);
+        my $rel = $relations->{$rel_at};
+        $callback->($rel, $rel_at, $rel_attr);
     }
 }
 

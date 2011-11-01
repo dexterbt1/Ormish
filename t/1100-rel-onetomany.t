@@ -19,18 +19,17 @@
 package main;
 use strict;
 use Test::More qw/no_plan/;
-use Test::Exception;
-use Scalar::Util qw/refaddr/;
 use DBI;
 use DBIx::Simple;
+use Set::Object;
 use Ormish;
 use FindBin;
 use lib "$FindBin::Bin/lib";
 
 
 my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
-$dbh->do('CREATE TABLE artist (id INTEGER PRIMARY KEY, name VARCHAR)');
-$dbh->do('CREATE TABLE album (id INTEGER PRIMARY KEY, name VARCHAR, artist_id INTEGER, 
+$dbh->do('CREATE TABLE artist (id INTEGER PRIMARY KEY, name VARCHAR, UNIQUE (name))');
+$dbh->do('CREATE TABLE album (id INTEGER PRIMARY KEY, name VARCHAR, artist_id INTEGER, UNIQUE (name), 
             FOREIGN KEY (artist_id) REFERENCES artist (id))');
 $dbh->commit;
 
@@ -121,9 +120,17 @@ $ds->register_mapping(
     my ($stevie) = $ds->query('Music::Artist')->where('{name} LIKE ?', 'Stevie%')->select_objects->list;
     is $stevie, $insqc->artist;
 
-    # rollback
+    # rollback, artist
+    $insqc->artist($pop->artist);
+    is $insqc->artist, $pop->artist;
+    $ds->rollback;
+    is $insqc->artist, $stevie;
 
     # change the whole collection
+    #$mj->albums(Set::Object->new(
+    #    Music::Album->new( name => 'Bad' ),
+    #    Music::Album->new( name => 'Dangerous' ),
+    #));
 
     # DELETE from collection
     

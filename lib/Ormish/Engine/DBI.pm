@@ -212,7 +212,7 @@ sub _build_select {
                 $sql_where =~ s[^\s*WHERE\s*][]i;
             }
             else {
-                Carp::croak("Unsupported \$query->where() type");
+                Carp::confess("Unsupported \$query->where() type");
             }
         }
 
@@ -227,7 +227,7 @@ sub _build_select {
                 $static_where =~ s[^\s*WHERE\s*][]i;
             }
             else {
-                Carp::croak("Unsupported \$query->meta_filter_static() type");
+                Carp::confess("Unsupported \$query->meta_filter_static() type");
             }
             # attach to where + bind
             if (length($sql_where) > 0) {

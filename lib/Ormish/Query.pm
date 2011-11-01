@@ -40,7 +40,7 @@ sub _build_meta_result {
         };
         if ($@) {
             # FIXME: try then if this is a relationship 
-            Carp::croak(@_); # unsupported for now
+            Carp::confess(@_); # unsupported for now
         }
         else {
             # for now, support 1 table per class
