@@ -109,7 +109,19 @@ $ds->register_mapping(
     @albums = $pop->artist->albums->members;
     is scalar(@albums), 1;
 
-    # reverse, add child with parent
+    # reverse add, a child with parent
+    @sql = ();
+    my $insqc = Music::Album->new( name => 'In Square Circle', artist => Music::Artist->new( name => "Stevie Wonder" ) );
+    $ds->add($insqc);
+    $ds->commit;
+    is scalar(@sql), 2; # insert + insert
+    ok defined $insqc->id;
+    ok defined $insqc->artist->id;
+
+    my ($stevie) = $ds->query('Music::Artist')->where('{name} LIKE ?', 'Stevie%')->select_objects->list;
+    is $stevie, $insqc->artist;
+
+    # rollback
 
     # change the whole collection
 

@@ -308,6 +308,17 @@ sub setup_related_collections {
 }
 
 
+sub traverse_relations {
+    my ($self, $obj, $callback) = @_;
+    foreach my $rel_at (keys %{$self->relations}) {
+        my $rel = $self->relations->{$rel_at};
+        my $attr = $obj->meta->get_attribute($rel_at);
+        my $v = $attr->get_raw_value($obj);
+        $callback->($obj, $v, $rel_at, $rel);
+    }
+}
+
+
 sub new_object_from_hashref {
     my ($self, $datastore, $h) = @_;
     my $obj_class   = $self->for_class;

@@ -74,7 +74,7 @@ sub add {
     # object is not yet managed by other datastore instances
     if (exists $store_of{$obj_addr}) {
         (refaddr($store_of{$obj_addr}) eq refaddr($self))
-            or Carp::croak("Cannot add object managed by another ".ref($self)." instance");
+            or Carp::confess("Cannot add object managed by another ".ref($self)." instance");
     }
 
     my $obj_oid = $mapping->oid->as_str( $obj );
@@ -83,6 +83,16 @@ sub add {
         my $undo_insert = sub {
             unbind_object( $obj );
         };
+        $mapping->traverse_relations($obj, sub {
+            my ($o, $rel_o, $rel_attr_name, $rel) = @_;
+            return if (not defined $rel_o);
+            if ($rel->is_collection) {
+                # TODO: adding of collections is not supported yet
+            }
+            else {
+                $self->add($rel_o); # deep add
+            }
+        });
         push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
     }
     elsif (not $mapping->oid->is_db_generated) {
@@ -95,8 +105,6 @@ sub add {
             push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
         }
     }
-    
-    # TODO: traverse attributes and relationships ...
 }
 
 
