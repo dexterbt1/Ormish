@@ -3,7 +3,7 @@ use strict;
 use Moose;
 use namespace::autoclean;
 
-use Scalar::Util qw/refaddr weaken/;
+use Scalar::Util ();
 use Carp();
 use YAML;
 
@@ -34,31 +34,33 @@ my %classes_with_hooks = ();
 sub of { # ---Function
     my ($obj) = @_;
     return if (not defined $obj);
-    my $addr = refaddr($obj);
+    my $addr = Scalar::Util::refaddr($obj);
     return (exists $store_of{$addr}) ? $store_of{$addr} : undef;
 }
 
 sub obj_is_dirty {
     my ($self, $obj) = @_;
-    return (exists $is_dirty{refaddr($self)}) ? exists($is_dirty{refaddr($self)}{refaddr($obj)}) : 0;
+    return (exists $is_dirty{Scalar::Util::refaddr($self)}) 
+        ? exists($is_dirty{Scalar::Util::refaddr($self)}{Scalar::Util::refaddr($obj)}) 
+        : 0;
 }
 
 sub clean_dirty_obj {
     my ($self, $obj) = @_;
-    delete $is_dirty{refaddr($self)}{refaddr($obj)};
+    delete $is_dirty{Scalar::Util::refaddr($self)}{Scalar::Util::refaddr($obj)};
 }
 
 sub bind_object { # --- Function
     my ($obj, $datastore) = @_;
     # bind obj to datastore 
-    my $obj_addr = refaddr($obj);
+    my $obj_addr = Scalar::Util::refaddr($obj);
     $store_of{$obj_addr} = $datastore;
-    weaken $store_of{$obj_addr};
+    Scalar::Util::weaken($store_of{$obj_addr});
 }
 
 sub unbind_object { # --- Function
     my ($obj) = @_;
-    my $obj_addr = refaddr($obj);
+    my $obj_addr = Scalar::Util::refaddr($obj);
     delete $store_of{$obj_addr};
 }
 
@@ -67,34 +69,33 @@ sub unbind_object { # --- Function
 sub add {
     my ($self, $obj) = @_;
     # check class if mapped; 
-    my $obj_addr = refaddr($obj);
+    my $obj_addr = Scalar::Util::refaddr($obj);
     my $class   = ref($obj) || '';
     my $mapping = $self->mapping_of_class($class);
 
     # object is not yet managed by other datastore instances
     if (exists $store_of{$obj_addr}) {
-        (refaddr($store_of{$obj_addr}) eq refaddr($self))
+        (Scalar::Util::refaddr($store_of{$obj_addr}) eq Scalar::Util::refaddr($self))
             or Carp::confess("Cannot add object managed by another ".ref($self)." instance");
     }
 
     my $obj_oid = $mapping->oid->as_str( $obj );
     if (not defined $obj_oid) {
         bind_object( $obj, $self );
-        my $undo_insert = sub {
+        my @undos = ();
+        push @undos, sub {
             unbind_object( $obj );
         };
         $mapping->meta_traverse_relations($class, sub {
             my ($rel, $rel_attr_name, $rel_attr) = @_;
             my $rel_o = $rel_attr->get_raw_value($obj);
             return if (not defined $rel_o);
-            if ($rel->is_collection) {
-                # TODO: adding of collections is not supported yet
-            }
-            else {
+            if (not $rel->is_collection) {
                 $self->add($rel_o); # deep add
             }
+            # collections are separately dealt with
         });
-        push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
+        push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], \@undos ];
     }
     elsif (not $mapping->oid->is_db_generated) {
         my $idmapped = $self->idmap_get($mapping, $obj);
@@ -113,7 +114,7 @@ sub add_dirty {
     my ($self, $o, $attr_name) = @_;
     # mark as dirty, save the original oid value
     my $class   = ref($o) || '';
-    $is_dirty{refaddr($self)}{refaddr($o)} = 1;
+    $is_dirty{Scalar::Util::refaddr($self)}{Scalar::Util::refaddr($o)} = 1;
     my $obj_m = $self->mapping_of_class($class);
     my $oids_before_update = $obj_m->oid->attr_values($o);
     my $mod_attr = $class->meta->get_attribute($attr_name);
@@ -149,8 +150,10 @@ sub flush {
     my ($self) = @_;
     while (my $work = shift @{$self->_work_queue}) {
         my ($engine_job, $undo) = @$work;
-        my ($engine_method, @params) = @$engine_job;
-        $self->engine->$engine_method(@params);
+        if ($engine_job) {
+            my ($engine_method, @params) = @$engine_job;
+            $self->engine->$engine_method(@params);
+        }
         if ($undo) {
             push @{$self->_work_flushed}, $work;
         }
@@ -170,12 +173,14 @@ sub rollback {
     $self->engine->rollback;
     my $do_undo = sub {
         my $w = shift;
-        my ($engine_job, $undo) = @$w;
-        my ($engine_method, @params) = @$engine_job;
-        my $undo_method = $engine_method.'_undo';
-        $self->engine->$undo_method(@params);
-        if ($undo) {
-            foreach my $u (@$undo) {
+        my ($engine_job, $undos) = @$w;
+        if ($engine_job) {
+            my ($engine_method, @params) = @$engine_job;
+            my $undo_method = $engine_method.'_undo';
+            $self->engine->$undo_method(@params);
+        }
+        if ($undos) {
+            foreach my $u (@$undos) {
                 $u->();
             }
         }
@@ -185,6 +190,14 @@ sub rollback {
     }
     while (my $work = pop @{$self->_work_flushed}) {
         $do_undo->($work);
+    }
+    # invalidate caches of collections in the identity map
+    my $thisaddr = Scalar::Util::refaddr($self);
+    foreach my $class (keys %{$ident_of{$thisaddr}}) {
+        my $m = $self->_mappings->{$class};
+        foreach my $o (values %{$ident_of{$thisaddr}{$class}}) {
+            $self->object_invalidate_related_collections($m, $o);
+        }
     }
     
 }
@@ -209,16 +222,15 @@ sub idmap_add {
     (defined $obj_oid)
         or Carp::confess("Cannot manage object without identity yet");
     # datastore -> class -> obj_oid = obj
-    $ident_of{refaddr($self)}{$obj_class}{$obj_oid} = $obj;
-    #weaken $ident_of{refaddr($self)}{$obj_class}{$obj_oid};
+    $ident_of{Scalar::Util::refaddr($self)}{$obj_class}{$obj_oid} = $obj; # strong ref
 }
 
 sub idmap_get {
     my ($self, $mapping, $oid_str) = @_;
     my $class = $mapping->for_class;
-    if (exists($ident_of{refaddr($self)}{$class}{$oid_str})) {
+    if (exists($ident_of{Scalar::Util::refaddr($self)}{$class}{$oid_str})) {
         # return cached copy from identity map
-        return $ident_of{refaddr($self)}{$class}{$oid_str};
+        return $ident_of{Scalar::Util::refaddr($self)}{$class}{$oid_str};
     }
     return;
 }
@@ -234,10 +246,45 @@ sub object_from_hashref {
     }
     Ormish::DataStore::bind_object($tmp_o, $self);
     $self->idmap_add($mapping, $tmp_o);
-    $mapping->setup_related_collections($self, $tmp_o);    
+    $self->object_setup_related_collections($mapping, $tmp_o);    
     return $tmp_o;
 }
 
+
+sub object_setup_related_collections {
+    my ($self, $mapping, $obj) = @_;
+    # assumes obj is persistent and w/ oid
+    # assumes obj has the correct $mapping + $datastore already
+
+    # populate relations if necessary
+    my $class = $mapping->for_class;
+    $mapping->meta_traverse_relations($class, sub {
+        my ($rel, $rel_attr_name, $rel_attr) = @_;
+        my $rel_o = $rel_attr->get_raw_value($obj);
+        if ($rel->is_collection) {
+            $rel_o = $rel->get_proxy($self, $rel_attr_name, $obj, $mapping);
+            $rel_attr->set_raw_value($obj, $rel_o);
+        }
+    });
+}
+
+
+sub object_invalidate_related_collections {
+    my ($self, $mapping, $obj) = @_;
+    # assumes obj is persistent and w/ oid
+    # assumes obj has the correct $mapping + $datastore already
+    # populate relations if necessary
+    my $class = $mapping->for_class;
+    $mapping->meta_traverse_relations($class, sub {
+        my ($rel, $rel_attr_name, $rel_attr) = @_;
+        my $rel_o = $rel_attr->get_raw_value($obj);
+        if ($rel->is_collection) {
+            if (Scalar::Util::blessed($rel_o) and $rel_o->can('invalidate_cache')) {
+                $rel_o->invalidate_cache;
+            }
+        }
+    });
+}
 
 
 # --- mapping routines
@@ -317,7 +364,7 @@ sub _add_class_hooks {
             if ($st) {
                 # delete store mapping
                 unbind_object($o);
-                delete $is_dirty{refaddr($st)}{refaddr($o)};
+                delete $is_dirty{Scalar::Util::refaddr($st)}{Scalar::Util::refaddr($o)};
             }
         };
         my $metaclass = $class->meta;
@@ -380,7 +427,7 @@ sub _add_class_hooks {
 sub DEMOLISH {
     my ($self) = @_;
     $self->rollback;
-    delete $ident_of{refaddr($self)}; # clear identity map
+    delete $ident_of{Scalar::Util::refaddr($self)}; # clear identity map
 }
 
 __PACKAGE__->meta->make_immutable;

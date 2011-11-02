@@ -81,7 +81,17 @@ $ds->register_mapping(
     @albums = $mj->albums->members;
     is scalar(@albums), 2;
     is scalar(@sql), 1;
-    ok 1;
+    @albums = $mj->albums->members;
+    is scalar(@sql), 1; # no extra query, cached already
+    
+    @sql = ();
+    my $dangerous = Music::Album->new( name => 'Dangerous' );
+    $mj->albums->insert( $dangerous ); # invalidates cache
+    $ds->commit;
+    is scalar(@sql), 1; # insert
+    @albums = $mj->albums->members;
+    is scalar(@sql), 2; # insert
+    is scalar(@albums), 3; # includes dangerous
 
     ## TODO: overloaded
     #@sql = ();
@@ -105,6 +115,7 @@ $ds->register_mapping(
     ok defined $pop->id;
     ok defined $pop->artist->id;
     is scalar(@sql), 2;
+
     @albums = $pop->artist->albums->members;
     is scalar(@albums), 1;
 
@@ -126,13 +137,37 @@ $ds->register_mapping(
     $ds->rollback;
     is $insqc->artist, $stevie;
 
-    # change the whole collection
+    # rollback set insert
+    @albums = $stevie->albums->elements;
+    is scalar(@albums), 1;
+
+    @sql = ();
+    $stevie->albums->insert( Music::Album->new( name => 'Unreleased 198x Stevie Album' ) );
+    $ds->flush; # no commit yet
+    is scalar(@sql), 1; # insert
+
+    @sql = ();
+    @albums = $stevie->albums->elements;
+    is scalar(@albums), 2;
+    is scalar(@sql), 1; 
+
+    $ds->rollback;
+
+    @sql = ();
+    @albums = $stevie->albums->elements;
+    is scalar(@albums), 1;
+    is scalar(@sql), 1; # another select, since cache was invalidated
+    
+
+    # change set
     #$mj->albums(Set::Object->new(
     #    Music::Album->new( name => 'Bad' ),
     #    Music::Album->new( name => 'Dangerous' ),
     #));
 
     # DELETE from collection
+
+    #my @artists = $ds->query('Music::Artist|artist', 'albums')->order_by('+{album.release}')->select_objects->list;
     
 }
 

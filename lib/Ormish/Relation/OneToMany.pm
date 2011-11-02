@@ -18,14 +18,15 @@ sub get_proxy {
     my $attr = $obj->meta->get_attribute($attr_name);
     my $existing_set = $attr->get_raw_value($obj);
 
-    my $proxy = Ormish::Relation::OneToMany::SetProxy->new;
-    $proxy->_attr_name($attr_name);
-    $proxy->_object($obj);
-    $proxy->_object_mapping($obj_mapping);
-    $proxy->_datastore($datastore);
-    $proxy->_relation($self);
+    my $proxy = Ormish::Relation::OneToMany::SetProxy->new(
+        _attr_name          => $attr_name,
+        _object             => $obj,
+        _object_mapping     => $obj_mapping,
+        _datastore          => $datastore,
+        _relation           => $self,
+    );
     # re-insert all items
-    if (defined($existing_set) and not($existing_set->isa(ref($self)))) {
+    if (defined($existing_set) and not($existing_set->isa(ref($proxy)))) {
         $proxy->insert($existing_set->members);
     }
 
@@ -45,10 +46,12 @@ __PACKAGE__->meta->make_immutable;
     use Moose;
     use MooseX::NonMoose;
     use MooseX::InsideOut;
-    use Ormish::Query;
-
+    
     use Scalar::Util ();
     use Carp ();
+    use Set::Object;
+
+    use Ormish::Query;
 
     with 'Ormish::Relation::Proxy::Role';
 
@@ -59,6 +62,7 @@ __PACKAGE__->meta->make_immutable;
     has '_object_mapping'   => (is => 'rw', isa => 'Ormish::Mapping');
     has '_datastore'        => (is => 'rw', isa => 'Ormish::DataStore', weak_ref => 1);
     has '_relation'         => (is => 'rw', does => 'Ormish::Relation::Role');
+    has '_cached_set'       => (is => 'rw', isa => 'Set::Object', predicate => '_has_cached_set', clearer => '_cached_set_clear');
 
     for (qw/ union equal /) {
         override $_ => sub {
@@ -69,11 +73,11 @@ __PACKAGE__->meta->make_immutable;
     # ---
 
     sub insert {
-        my ($self, @thingies) = @_;
+        my $self = shift;
         my $o = $self->_object;
         my $ds = $self->_datastore;
         $ds->flush;
-        foreach my $t (@thingies) {
+        foreach my $t (@_) {
             my $t_ds = Ormish::DataStore::of($t);
             my $t_class = ref($t);
             my $t_mapping = $ds->mapping_of_class($t_class);
@@ -93,16 +97,24 @@ __PACKAGE__->meta->make_immutable;
                 1;
             }
         }
-        return scalar(@thingies);
+        $self->invalidate_cache;
+        return scalar(@_);
     }
 
+    sub invalidate_cache {
+        $_[0]->_cached_set_clear;
+    }
     
-    sub elements { $_[0]->members(@_); }
+    sub elements { return $_[0]->members(@_); }
 
     sub members {
         my ($self) = @_;
-        my $q = $self->get_query;
-        return $q->select_objects->list;
+        if (not $self->_has_cached_set) {
+            my $q = $self->get_query;
+            my $set = Set::Object->new($q->select_objects->list);
+            $self->_cached_set($set);
+        }
+        return $self->_cached_set->members;
     }
 
     sub get_query {
