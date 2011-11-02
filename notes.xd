@@ -1,0 +1,29 @@
+API Philosophy
+--------------
+= k.i.s.s. keep it simple stupid, as much as we can anyway
+= don't repeat yourself (DRY), as much as we can anyway
+= play nice and be as unintrusive with mapped classes, as much as we can anyway
+= be explicit, and be obvious when doing things, yet provide sensible defaults and 'auto' behavior
+= be idiomatic, be perlish, not too sweet (much sugar), and not too verbose
+= die early, die often
+
+API Influences
+--------------
+perl: DBIx::Simple, DBIx::DataModel, DBIx::Class
+python: SQLAlchemy, Storm, Django
+java: Hibernate, JPA
+
+TODO
+----
+order_by
+limit
+offset
+implicit joins
+many to many
+value object inflation/deflation/criteria (DateTime)
+group_by
+having
+cyclic
+subqueries
+inheritance
+
