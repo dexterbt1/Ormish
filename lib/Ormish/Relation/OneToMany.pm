@@ -104,17 +104,27 @@ __PACKAGE__->meta->make_immutable;
     sub invalidate_cache {
         $_[0]->_cached_set_clear;
     }
+
+    sub size {
+        my ($self) = @_;
+        return $self->members_set->size;
+    }
     
     sub elements { return $_[0]->members(@_); }
 
     sub members {
+        my ($self) = @_;
+        return $self->members_set->members;
+    }
+
+    sub members_set {
         my ($self) = @_;
         if (not $self->_has_cached_set) {
             my $q = $self->get_query;
             my $set = Set::Object->new($q->select_objects->list);
             $self->_cached_set($set);
         }
-        return $self->_cached_set->members;
+        return $self->_cached_set;
     }
 
     sub get_query {
@@ -136,10 +146,9 @@ __PACKAGE__->meta->make_immutable;
     }
         
 
-    no Moose;
-
     __PACKAGE__->meta->make_immutable;
 }
+
 
 1;
 

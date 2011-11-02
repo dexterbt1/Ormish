@@ -81,8 +81,7 @@ $ds->register_mapping(
     @albums = $mj->albums->members;
     is scalar(@albums), 2;
     is scalar(@sql), 1;
-    @albums = $mj->albums->members;
-    is scalar(@sql), 1; # no extra query, cached already
+    @albums = $mj->albums->members; is scalar(@sql), 1; # no extra query, cached already
     
     @sql = ();
     my $dangerous = Music::Album->new( name => 'Dangerous' );
@@ -93,12 +92,14 @@ $ds->register_mapping(
     is scalar(@sql), 2; # insert
     is scalar(@albums), 3; # includes dangerous
 
-    ## TODO: overloaded
-    #@sql = ();
-    #@albums = @{$mj->albums};
-    #is scalar(@albums), 2;
-    #is scalar(@sql), 1;
-    #ok 1;
+    ## TODO: overloading
+    @sql = ();
+    @albums = @{$mj->albums}; # cached
+    is scalar(@albums), 3;
+    is scalar(@sql), 0;
+
+    is scalar(@{$mj->albums}), 3; # cached
+    is scalar(@sql), 0;
 
     # add another, this time via the child relation
     @sql = ();

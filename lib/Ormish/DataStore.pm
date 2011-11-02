@@ -274,6 +274,7 @@ sub object_invalidate_related_collections {
     # assumes obj is persistent and w/ oid
     # assumes obj has the correct $mapping + $datastore already
     # populate relations if necessary
+    return if (not defined $obj);
     my $class = $mapping->for_class;
     $mapping->meta_traverse_relations($class, sub {
         my ($rel, $rel_attr_name, $rel_attr) = @_;
