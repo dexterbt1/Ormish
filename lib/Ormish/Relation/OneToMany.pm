@@ -107,7 +107,14 @@ __PACKAGE__->meta->make_immutable;
 
     sub size {
         my ($self) = @_;
-        return $self->members_set->size;
+        if ($self->_has_cached_set) {
+            return $self->members_set->size;
+        }
+        else {
+            # do a select count
+            my ($row) = $self->get_query->select_rows(['COUNT(1)|c'])->list;
+            return $row->{c};
+        }
     }
     
     sub elements { return $_[0]->members(@_); }

@@ -162,13 +162,19 @@ $ds->register_mapping(
     @albums = $stevie->albums->elements;
     is scalar(@albums), 1;
     is scalar(@sql), 1; # another select, since cache was invalidated
+
+    @sql = ();
+    $stevie->albums->invalidate_cache; # public invalidation
+    is $stevie->albums->size, 1;
+    is scalar(@sql), 1; # another select, since cache was invalidated
     
 
-    # change set
+    # change related collection, sets are accepted
     #$mj->albums(Set::Object->new(
     #    Music::Album->new( name => 'Bad' ),
-    #    Music::Album->new( name => 'Dangerous' ),
+    #    $dangerous,
     #));
+    #is $mj->albums->size, 2;
 
     # DELETE from collection
 
