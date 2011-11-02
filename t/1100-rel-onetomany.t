@@ -108,6 +108,10 @@ $ds->register_mapping(
     $ds->commit;
     is scalar(@sql), 1;
 
+    @sql = ();
+    is scalar(@{$mj->albums}), 4; # new select
+    is scalar(@sql), 1;
+
     # change artist
     @sql = ();
     $pop->artist( Music::Artist->new( name => 'Paul McCartney' ) ); # tricky, should be insert artist + update album

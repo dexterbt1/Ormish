@@ -89,11 +89,12 @@ sub add {
         $mapping->meta_traverse_relations($class, sub {
             my ($rel, $rel_attr_name, $rel_attr) = @_;
             my $rel_o = $rel_attr->get_raw_value($obj);
+            my $rel_m = $self->_mappings->{ref($rel_o)};
             return if (not defined $rel_o);
             if (not $rel->is_collection) {
                 $self->add($rel_o); # deep add
+                $self->object_invalidate_related_collections($rel_m, $rel_o);
             }
-            # collections are separately dealt with
         });
         push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], \@undos ];
     }
