@@ -106,6 +106,31 @@ __PACKAGE__->meta->make_immutable;
             return $row->{c};
         }
     }
+
+    sub includes {
+        my ($self, @thingies) = @_;
+        my $o = $self->_object;
+        my $ds = $self->_datastore;
+        my $rev_rel_info = $self->_object_mapping->get_reverse_relation_info($ds, $self->_attr_name);
+        my $rev_class = $rev_rel_info->{mapping}->for_class;;
+
+        my @t_oid_attrs = $rev_rel_info->{mapping}->oid->get_attributes;
+
+        # support single primary-keys for now
+        (scalar(@t_oid_attrs)==1)
+            or Carp::confess("Unsupported oid column count for class '$rev_class'");
+
+        my $t_oid = $rev_rel_info->{mapping}->oid;
+        my ($pk) = @t_oid_attrs;
+
+        my $q = $self->get_query;
+        my ($row) = $self->get_query
+                         ->where("{$pk} IN (??)", map { values %{$t_oid->attr_values($_)} } @thingies)
+                         ->select_rows(['COUNT(1)|c'])
+                         ->list
+                         ;
+        return ($row->{c} == scalar(@thingies));
+    }
     
     sub elements { return $_[0]->members(@_); }
 

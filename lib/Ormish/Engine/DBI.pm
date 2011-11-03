@@ -26,7 +26,6 @@ has 'sql_abstract'  => (is => 'rw', isa => 'SQL::Abstract::More', default => sub
 
 
 # TODO: how do we handle multi-table inheritance
-# FIXME: how do we handle natural keys
 # FIXME: how do we handle composite keys
 
 

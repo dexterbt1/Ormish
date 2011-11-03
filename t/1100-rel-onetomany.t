@@ -194,8 +194,6 @@ $ds->register_mapping(
     $ds->commit;
 
 
-    # DELETE from collection
-
     # add first, so we can test deletes later
     @sql = ();
     $mj->albums->insert( $thriller );
@@ -210,6 +208,26 @@ $ds->register_mapping(
     is scalar(@sql), 1; # update
     is $mj->albums->size, 4;
     is scalar(@{$mj->albums}), 4;
+
+    # includes!
+    @sql = ();
+    is $off_the_wall->artist, $mj;
+    #ok $mj->albums->contains($off_the_wall);
+    #is scalar(@sql), 1; # select
+
+
+    # DELETE from collection
+
+    # delete type 1
+=pod
+    @sql = ();
+    $mj->albums->remove( $off_the_wall );
+    $ds->commit;
+    is scalar(@sql), 1; # delete 
+    is $mj->albums->size, 3;
+    is $off_the_
+=cut
+    
 
 
     #my @artists = $ds->query('Music::Artist|artist', 'albums')->order_by('+{album.release}')->select_objects->list;
