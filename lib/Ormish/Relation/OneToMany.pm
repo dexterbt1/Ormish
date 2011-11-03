@@ -122,7 +122,7 @@ __PACKAGE__->meta->make_immutable;
         }
         else {
             # do a select count
-            my ($row) = $self->get_query->select_rows(['COUNT(1)|c'])->list;
+            my ($row) = $self->get_query->select_rows('COUNT(1)|c')->list;
             return $row->{c};
         }
     }
@@ -147,7 +147,7 @@ __PACKAGE__->meta->make_immutable;
         my $qmarks = join ',', ('?') x scalar(@thingies);
         my $row  = $self->get_query
                         ->where("{$pk} IN ($qmarks)", map { values %{$t_oid->attr_values($_)} } @thingies)
-                        ->select_rows(['COUNT(1)|c'])
+                        ->select_rows('COUNT(1)|c')
                         ->first
                         ;
         return ($row->{c} == scalar(@thingies));

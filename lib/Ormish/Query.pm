@@ -117,9 +117,9 @@ sub select_objects {
 
 
 sub select_rows {
-    my ($self, $opt_columns_spec) = @_;
+    my ($self, @opt_columns_spec) = @_;
     $self->datastore->flush;
-    return $self->datastore->engine->rows_select($self->datastore, $self, $opt_columns_spec);
+    return $self->datastore->engine->rows_select($self->datastore, $self, \@opt_columns_spec);
 }
 
 

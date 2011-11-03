@@ -190,13 +190,13 @@ my $ds = Ormish::DataStore->new(
     my $dst = $ds;
 
     # just count
-    ($stats) = $dst->query('My::Blog')->select_rows(['COUNT(1)|c'])->list;
+    ($stats) = $dst->query('My::Blog')->select_rows('COUNT(1)|c')->list;
     is $stats->{c}, 3;
     is scalar(@sql), 1;
     @sql = ();
 
     # or the whole bunch, and aliased
-    ($stats) = $dst->query('My::Blog|b')->select_rows(['COUNT(1)|count', 'MIN({b.id})|min', 'MAX({b.id})|max_id' ])->list;
+    ($stats) = $dst->query('My::Blog|b')->select_rows('COUNT(1)|count', 'MIN({b.id})|min', 'MAX({b.id})|max_id')->list;
     is $stats->{count}, 3;
     is $stats->{min}, 1;
     is $stats->{max_id}, 123;
