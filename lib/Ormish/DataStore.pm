@@ -80,34 +80,47 @@ sub add {
     }
 
     my $obj_oid = $mapping->oid->as_str( $obj );
-    if (not defined $obj_oid) {
-        bind_object( $obj, $self );
-        my @undos = ();
-        push @undos, sub {
-            unbind_object( $obj );
-        };
-        $mapping->meta_traverse_relations($class, sub {
-            my ($rel, $rel_attr_name, $rel_attr) = @_;
-            my $rel_o = $rel_attr->get_raw_value($obj);
-            my $rel_m = $self->_mappings->{ref($rel_o)};
-            return if (not defined $rel_o);
-            if (not $rel->is_collection) {
-                $self->add($rel_o); # deep add
-                $self->object_invalidate_related_collections($rel_m, $rel_o);
-            }
-        });
-        push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], \@undos ];
-    }
-    elsif (not $mapping->oid->is_db_generated) {
-        my $idmapped = $self->idmap_get($mapping, $obj);
-        if (not $idmapped) {
-            bind_object( $obj, $self );
-            my $undo_insert = sub {
-                unbind_object( $obj );
-            };
-            push @{$self->_work_queue}, [ [ 'insert_object', $self, $obj ], [ $undo_insert ] ];
+
+    if (defined $obj_oid) {
+        if (not $mapping->oid->is_db_generated) { # e.g. natural keys
+            my $idmapped = $self->idmap_get($mapping, $obj);
+            return if ($idmapped); # ok, means we have added/seen this object before
+            # if we get here, it means we need to insert this object yet as it's not in the identity map
+        }
+        else {
+            return; # autoinc pk that we've seen already
         }
     }
+    else { # undef oid
+        if (not $mapping->oid->is_db_generated) {
+            Carp::confess("Cannot add object with undefined non-DB-generated OID");
+        }
+    }
+
+    bind_object( $obj, $self );
+    $mapping->meta_traverse_relations($class, sub {
+        my ($rel, $rel_attr_name, $rel_attr) = @_;
+        my $rel_o = $rel_attr->get_raw_value($obj);
+        my $rel_m = $self->_mappings->{ref($rel_o)};
+        return if (not defined $rel_o);
+        if (not $rel->is_collection) {
+            $self->add($rel_o); # deep add
+            $self->object_invalidate_related_collections($rel_m, $rel_o);
+        }
+    });
+    my @dos = ();
+    push @dos, sub {
+        $self->engine->insert_object($self, $obj);
+        $self->clean_dirty_obj($obj);
+        $self->idmap_add($mapping, $obj);
+        $self->object_setup_related_collections($mapping, $obj);
+    };
+
+    my @undos = ();
+    push @undos, sub {
+        unbind_object( $obj );
+    };
+    push @{$self->_work_queue}, [ \@dos, \@undos ];
 }
 
 
@@ -123,7 +136,17 @@ sub add_dirty {
     my $undo_attr_set = sub { 
         $mod_attr->set_raw_value($o, $prev_value); 
     };
-    push @{$self->_work_queue}, [ [ 'update_object', $self, $o, $oids_before_update ], [ $undo_attr_set ] ];
+    my $do_attr_set = sub {
+        $self->engine->update_object($self, $o, $oids_before_update);
+        $self->clean_dirty_obj($o);
+    };
+    push @{$self->_work_queue}, [ [ $do_attr_set ], [ $undo_attr_set ] ];
+}
+
+
+sub add_dirty_collection {
+    my ($self, $o, $rel_attr_name, $rel, $new_val, $old_val) = @_;
+    
 }
 
 
@@ -143,21 +166,23 @@ sub delete {
             $self->idmap_add($mapping, $obj);
         };
         my $oids_on_delete = $mapping->oid->attr_values($obj);
-        push @{$self->_work_queue}, [ [ 'delete_object', $self, $obj, $oids_on_delete ], [ $undo_delete ] ];
+        my $do_delete = sub {
+            $self->engine->delete_object($self, $obj, $oids_on_delete);
+        };
+        push @{$self->_work_queue}, [ [ $do_delete ], [ $undo_delete ] ];
     }
 }
 
 sub flush {
     my ($self) = @_;
     while (my $work = shift @{$self->_work_queue}) {
-        my ($engine_job, $undo) = @$work;
-        if ($engine_job) {
-            my ($engine_method, @params) = @$engine_job;
-            $self->engine->$engine_method(@params);
+        my ($dos, $undos) = @$work;
+        if ($dos) { # do it!
+            foreach my $do (@$dos) {
+                $do->();
+            }
         }
-        if ($undo) {
-            push @{$self->_work_flushed}, $work;
-        }
+        push @{$self->_work_flushed}, $work;
     }
 }
 
@@ -174,13 +199,8 @@ sub rollback {
     $self->engine->rollback;
     my $do_undo = sub {
         my $w = shift;
-        my ($engine_job, $undos) = @$w;
-        if ($engine_job) {
-            my ($engine_method, @params) = @$engine_job;
-            my $undo_method = $engine_method.'_undo';
-            $self->engine->$undo_method(@params);
-        }
-        if ($undos) {
+        my ($dos, $undos) = @$w;
+        if ($undos) { # just undo
             foreach my $u (@$undos) {
                 $u->();
             }
@@ -383,7 +403,9 @@ sub _add_class_hooks {
         }
         # install dirty detectors, 
         #       i.e. detect if the object was modified via writers/accessor, then mark as dirty
-        my $hook__on_modify_mark_dirty = sub {
+
+        # simple attributes
+        my $hook__on_modify_mark_dirty_simple = sub {
             my ($mod_attr) = @_;
             return sub {
                 my $o = shift @_;
@@ -392,10 +414,6 @@ sub _add_class_hooks {
                     my $new_val = $_[0];
                     my $old_val = $mod_attr->get_raw_value($o);
                     if ($st) {
-                        # TODO: handle collections
-                        if (Scalar::Util::blessed($new_val)) {
-                            $st->add($new_val);
-                        }
                         $st->add_dirty($o, $mod_attr->name);
                     }
                 }
@@ -406,15 +424,42 @@ sub _add_class_hooks {
             my $attr = $metaclass->get_attribute($attr_name);
             my $writer_name = $attr->writer || $attr->accessor;
             return if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
-            $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty->($attr) );
+            $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty_simple->($attr) );
         });
 
-        # TODO: for now, treat just like any other simple persistent attribute
+        # related objects attributes
+        my $hook__on_modify_mark_dirty_related = sub {
+            my ($mod_attr, $rel) = @_;
+            return sub {
+                my $o = shift @_;
+                if (scalar @_ > 0) {
+                    my $st = Ormish::DataStore::of($o); 
+                    my $new_val = $_[0];
+                    my $old_val = $mod_attr->get_raw_value($o);
+                    if ($st) {
+                        if ($rel->is_collection) {
+                            if (Scalar::Util::blessed($new_val)) {
+                                $st->add_dirty_collection($o, $mod_attr->name, $rel, $new_val, $old_val);
+                            }
+                            else {
+                                # TODO: handle undefs, etc
+                            }
+                        }
+                        else {
+                            if (defined $new_val) {
+                                $st->add($new_val);
+                            }
+                            $st->add_dirty($o, $mod_attr->name);
+                        }
+                    }
+                }
+            };
+        };
         $m->meta_traverse_relations($class, sub {
             my ($rel, $rel_at, $rel_attr) = @_;
             my $writer_name = $rel_attr->writer || $rel_attr->accessor;
             return if (not defined $writer_name); # skip non-public attributes (i.e. w/o writers/accessors)
-            $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty->($rel_attr) );
+            $metaclass->add_before_method_modifier( $writer_name, $hook__on_modify_mark_dirty_related->($rel_attr, $rel) );
         });
 
 

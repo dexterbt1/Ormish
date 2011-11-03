@@ -3,9 +3,8 @@ use Moose::Role;
 
 requires qw/
     insert_object
-    insert_object_undo
     update_object
-    update_object_undo
+    delete_object
 
     commit
     rollback

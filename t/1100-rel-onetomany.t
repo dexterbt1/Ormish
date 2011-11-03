@@ -12,7 +12,7 @@
     use Moose;
     use namespace::autoclean;
     has 'name'      => (is => 'rw', isa => 'Str', required => 1);
-    has 'artist'    => (is => 'rw', isa => 'Music::Artist');
+    has 'artist'    => (is => 'rw', isa => 'Music::Artist|Undef');
     __PACKAGE__->meta->make_immutable;
 }
 
@@ -170,11 +170,27 @@ $ds->register_mapping(
     
 
     # change related collection, sets are accepted
-    #$mj->albums(Set::Object->new(
-    #    Music::Album->new( name => 'Bad' ),
-    #    $dangerous,
-    #));
-    #is $mj->albums->size, 2;
+
+    my $prev_albums = $mj->albums;
+    foreach my $a ($prev_albums->members) {
+        is $a->artist, $mj;        
+    }
+
+=pod
+    $mj->albums(Set::Object->new(
+        Music::Album->new( name => 'Bad' ),
+        $dangerous,
+    ));
+    is $mj->albums->size, 2;
+
+    foreach my $a ($mj->albums->members) {
+        is $a->artist, $mj;        
+    }
+    foreach my $a ($prev_albums->members) {
+        isnt $a->artist, $mj;
+        is $a->artists, undef;
+    }
+=cut
 
     # DELETE from collection
 

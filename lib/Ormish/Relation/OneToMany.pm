@@ -9,7 +9,7 @@ with 'Ormish::Relation::Role';
 sub check_supported_type_constraint {
     my ($self, $class, $attr_name) = @_;
     my $attr = $class->meta->get_attribute($attr_name);
-    $attr->verify_against_type_constraint(Set::Object->new)
+    $attr->type_constraint->is_a_type_of('Set::Object')
         or Carp::confess("Unsupported type constraint for attribute '$attr_name' in class '$class' (expected Set::Object)");
 }
 

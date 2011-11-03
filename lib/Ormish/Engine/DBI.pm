@@ -50,14 +50,6 @@ sub insert_object {
             }
         }
     }
-    $datastore->clean_dirty_obj($obj);
-    $datastore->idmap_add($mapping, $obj);
-    $datastore->object_setup_related_collections($mapping, $obj);
-}
-
-
-sub insert_object_undo {
-    # nop
 }
 
 # ---
@@ -81,11 +73,6 @@ sub update_object {
             $self->execute_raw_query([$stmt, \@bind])->flat; 
         } @{$table_rows->{$table}};
     }
-    $datastore->clean_dirty_obj($obj);
-}
-
-sub update_object_undo {
-    # nop
 }
 
 # ---
@@ -104,10 +91,6 @@ sub delete_object {
             $self->execute_raw_query([$stmt, \@bind])->flat; 
         } @{$table_rows->{$table}};
     }
-}
-
-sub delete_object_undo {
-    # nop
 }
 
 # ---

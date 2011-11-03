@@ -6,8 +6,13 @@ use Scalar::Util ();
 
 with 'Ormish::Relation::Role';
 
-sub check_supported_type_constraint { # TODO
-    # nop for now
+sub check_supported_type_constraint {
+    my ($self, $class, $attr_name) = @_;
+    # strongly impose associations for now (i.e. NULLable FKs)
+    # FIXME: inheritance and composition will not require this
+    my $attr = $class->meta->get_attribute($attr_name);
+    $attr->type_constraint->check(undef)
+        or Carp::confess("Expected 'Undef' to be included in type constraint of attribute '$attr_name' in class '$class'");
 }
 
 sub get_proxy {

@@ -37,7 +37,7 @@
 
     has 'title'             => (is => 'rw', isa => 'Str', required => 1);
     has 'content'           => (is => 'rw', isa => 'Str');
-    has 'parent_blog'       => (is => 'rw', isa => 'My::Blog');
+    has 'parent_blog'       => (is => 'rw', isa => 'My::Blog|Undef');
 
     sub _ORMISH_MAPPING {
         return Ormish::Mapping->new(  
