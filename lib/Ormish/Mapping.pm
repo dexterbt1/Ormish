@@ -264,12 +264,18 @@ sub object_update_table_rows {
             my $v       = $attr->get_value($obj);
             if (exists $self->relations->{$at}) {
                 # collapse objects into their oids
-                my $fk_mapping      = $datastore->mapping_of_class(ref($v));
-                my $fk_oid_values   = $fk_mapping->oid->attr_values($v);
+                my ($fk_mapping, $fk_oid_values) = @_;
+                if (defined $v) {
+                    $fk_mapping      = $datastore->mapping_of_class(ref($v));
+                    $fk_oid_values   = $fk_mapping->oid->attr_values($v);
+                } # else null values
                 my %col_to_fk_values = ();
                 foreach my $col_to_fk_attr_name (split(/,/, $col)) {
                     my ($c, $fk_attr_name) = split /=/, $col_to_fk_attr_name;
-                    $col_to_fk_values{$c} = $fk_oid_values->{$fk_attr_name};
+                    $col_to_fk_values{$c} 
+                        = (defined $fk_oid_values) 
+                            ? $fk_oid_values->{$fk_attr_name} 
+                            : undef;
                 }
                 %row = (%row, %col_to_fk_values);
             }

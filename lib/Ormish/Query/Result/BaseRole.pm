@@ -9,6 +9,7 @@ has 'query'         => (is => 'rw', isa => 'Ormish::Query', required => 1);
 requires qw/
     next
     list
+    first
 /;
 
 use overload

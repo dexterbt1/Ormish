@@ -9,45 +9,61 @@ with 'Ormish::Query::Result::BaseRole';
 extends 'Ormish::Engine::DBI::ResultRows';
 
 # the object tree, arrayref of objects based on the wanted query's result_types
-has '_objects'          => (is => 'rw', isa => 'ArrayRef|Undef', predicate => '_objtree_built');
+has '_objects'          => (is => 'rw', isa => 'ArrayRef|Undef', predicate => '_objects_built');
 
-sub _build_object_tree {
+# meta data cache
+has '_result_cta'       => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
+has '_mapping_of_class' => (is => 'rw', isa => 'HashRef', default => sub { { } });
+
+
+sub BUILD {
     my ($self) = @_;
-    my %map_class_oid = (); 
-    my $datastore   = $self->query->datastore;
-    my $class_to_mapping = $self->cache_mapping;
-    while (my $row = $self->next_row) { # TODO: possible fragile base class
-        my ($class, $table, $alias) = @{$self->cache_result_cta};
+    my @result_cta = @{$self->query->meta_result_cta};
+    $self->_result_cta( \@result_cta );
+    # for now, build only 1 class 
+    my ($class, $table, $alias) = @{$self->_result_cta};
+    $self->_mapping_of_class->{$class} = $self->query->datastore->mapping_of_class($class);
+}
 
-        my $mapping = $class_to_mapping->{$class};
-        my $o       = $datastore->object_from_hashref($mapping, $row); # deep
-        my $oid_str = $mapping->oid->as_str($o);
 
-        $map_class_oid{$class}{$oid_str} = $o;
-    }
+sub _build_one_object {
+    my ($self, $row) = @_;
+    my ($class, $table, $alias) = @{$self->_result_cta};
+    my $mapping = $self->_mapping_of_class->{$class};
+    my $o       = $self->query->datastore->object_from_hashref($mapping, $row); # deep
+    return $o;
+}
+
+sub _build_objects {
+    my ($self) = @_;
     my @objects = ();
-    foreach my $class (keys %$class_to_mapping) {
-        push @objects, values %{$map_class_oid{$class}};
-    } 
-    %map_class_oid = ();
+    while (my $row = $self->next_row) { # TODO: possible fragile base class
+        push @objects, $self->_build_one_object($row);
+    }
     $self->_objects(\@objects);
 }
         
 
 sub next {
     my ($self) = @_;
-    if (not $self->_objtree_built) {
-        $self->_build_object_tree;
+    if (not $self->_objects_built) {
+        $self->_build_objects;
     }
     return shift @{$self->_objects};
 }
 
 sub list {
     my ($self) = @_;
-    if (not $self->_objtree_built) {
-        $self->_build_object_tree;
+    if (not $self->_objects_built) {
+        $self->_build_objects;
     }
     return @{$self->_objects};
+}
+
+sub first {
+    my ($self) = @_;
+    my $row = $self->first_row;
+    return $self->_build_one_object($row);
 }
 
 

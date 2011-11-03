@@ -61,7 +61,9 @@ sub bind_object { # --- Function
 sub unbind_object { # --- Function
     my ($obj) = @_;
     my $obj_addr = Scalar::Util::refaddr($obj);
-    delete $store_of{$obj_addr};
+    if (defined $obj_addr) {
+        delete $store_of{$obj_addr};
+    }
 }
 
 # --- 
@@ -134,6 +136,7 @@ sub add_dirty {
     my $mod_attr = $class->meta->get_attribute($attr_name);
     my $prev_value = $mod_attr->get_raw_value($o);
     my $undo_attr_set = sub { 
+        return if (not defined $mod_attr);
         $mod_attr->set_raw_value($o, $prev_value); 
     };
     my $do_attr_set = sub {
@@ -145,8 +148,43 @@ sub add_dirty {
 
 
 sub add_dirty_collection {
-    my ($self, $o, $rel_attr_name, $rel, $new_val, $old_val) = @_;
-    
+    my ($self, $o, $rel_attr, $rel, $new_val, $old_val) = @_;
+    my $class = ref($o);
+    my $o_m = $self->mapping_of_class($class);
+    my $reverse_rel = $o_m->get_reverse_relation_info($self, $rel_attr->name);
+    my $reverse_class = $reverse_rel->{mapping}->for_class;
+    my $reverse_attr = $reverse_class->meta->get_attribute($reverse_rel->{attr_name});
+    if ($new_val->can('does') && $new_val->does('Ormish::Relation::Proxy::Role')) {
+        Carp::confess("Assert: unsupported operation");
+    }
+    else {
+        my $proxy = $rel->get_proxy($self, $rel_attr->name, $o, $o_m);
+        foreach my $existing_o (@$old_val) { # TODO: should use remove
+            my $ds = Ormish::DataStore::of($existing_o);
+            if ($ds) {
+                $self->add_dirty($existing_o, $reverse_rel->{attr_name}); # mark as dirty first prior to modifying the value
+            }
+            else {
+                $self->add($existing_o); # mark as dirty first prior to modifying the value
+            }
+            $reverse_attr->set_raw_value($existing_o, undef);
+        }
+        foreach my $new_o (@$new_val) {
+            my $ds = Ormish::DataStore::of($new_o);
+            if ($ds) {
+                $self->add_dirty($new_o, $reverse_rel->{attr_name}); # mark as dirty first prior to modifying the value
+            }
+            else {
+                $self->add($new_o); # mark as dirty first prior to modifying the value
+            }
+            $reverse_attr->set_raw_value($new_o, $o);
+        }
+        $_[4] = $proxy; # substitute!
+    }
+
+    if ($old_val->can('does') && $old_val->does('Ormish::Relation::Proxy::Role')) {
+        $old_val->invalidate_cache() if ($old_val->can('invalidate_cache'));
+    }
 }
 
 
@@ -284,7 +322,16 @@ sub object_setup_related_collections {
         my $rel_o = $rel_attr->get_raw_value($obj);
         if ($rel->is_collection) {
             $rel_o = $rel->get_proxy($self, $rel_attr_name, $obj, $mapping);
+
+            # re-insert all existing items
+            my $existing_set = $rel_attr->get_raw_value($obj);
+            if (defined($existing_set) and not($existing_set->isa(ref($rel_o)))) {
+                $rel_o->insert($existing_set->members);
+            }
+            $self->flush;
+
             $rel_attr->set_raw_value($obj, $rel_o);
+    
         }
     });
 }
@@ -439,7 +486,7 @@ sub _add_class_hooks {
                     if ($st) {
                         if ($rel->is_collection) {
                             if (Scalar::Util::blessed($new_val)) {
-                                $st->add_dirty_collection($o, $mod_attr->name, $rel, $new_val, $old_val);
+                                $st->add_dirty_collection($o, $mod_attr, $rel, $_[0], $old_val);
                             }
                             else {
                                 # TODO: handle undefs, etc

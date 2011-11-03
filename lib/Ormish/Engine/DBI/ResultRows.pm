@@ -9,28 +9,20 @@ with 'Ormish::Query::Result::BaseRole';
 # depend on DBIx::Simple-style interface for now
 has '_engine_result'    => (is => 'rw', isa => 'Any', writer => '_set_engine_result', predicate => '_has_engine_result');
 
-# meta data cache
-has 'cache_result_cta'  => (is => 'rw', isa => 'ArrayRef', default => sub { [ ] });
-has 'cache_mapping'     => (is => 'rw', isa => 'HashRef', default => sub { { } });
 
-
-sub BUILD {
-    my ($self) = @_;
-    my @result_cta = @{$self->query->meta_result_cta};
-    $self->cache_result_cta( \@result_cta );
-    # for now, build only 1 class 
-    my ($class, $table, $alias) = @{$self->cache_result_cta};
-    $self->cache_mapping->{$class} = $self->query->datastore->mapping_of_class($class);
-}
-
-
-sub next_row {
+sub _get_cached_engine_result {
     my ($self) = @_;
     if (not $self->_has_engine_result) {
         my $r = $self->engine->execute_raw_query($self->engine_query);
         $self->_set_engine_result($r);
     }
-    my $row = $self->_engine_result->hash; 
+    return $self->_engine_result;
+}
+
+
+sub next_row {
+    my ($self) = @_;
+    my $row = $self->_get_cached_engine_result->hash; 
     return $row;
 }
 
@@ -41,13 +33,19 @@ sub next {
 
 sub list {
     my ($self) = @_;
-    if (not $self->_has_engine_result) {
-        my $r = $self->engine->execute_raw_query($self->engine_query);
-        $self->_set_engine_result($r);
-    }
-    return $self->_engine_result->hashes;
+    return $self->_get_cached_engine_result->hashes;
 }
 
+sub first_row {
+    my ($self) = @_;
+    my $r = $self->_get_cached_engine_result->hash;
+    $self->_get_cached_engine_result->finish;
+    return $r;
+}
+
+sub first {
+    return $_[0]->first_row;
+}
 
 __PACKAGE__->meta->make_immutable;
 

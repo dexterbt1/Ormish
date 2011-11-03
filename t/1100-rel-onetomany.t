@@ -176,7 +176,6 @@ $ds->register_mapping(
         is $a->artist, $mj;        
     }
 
-=pod
     $mj->albums(Set::Object->new(
         Music::Album->new( name => 'Bad' ),
         $dangerous,
@@ -186,11 +185,9 @@ $ds->register_mapping(
     foreach my $a ($mj->albums->members) {
         is $a->artist, $mj;        
     }
-    foreach my $a ($prev_albums->members) {
-        isnt $a->artist, $mj;
-        is $a->artists, undef;
-    }
-=cut
+    isnt $ds->query('Music::Album')->where('{name} = ?', 'Thriller')->select_objects->first, $mj;
+    my ($off_the_wall) = $ds->query('Music::Album')->where('{name} = ?', 'Off The Wall')->select_objects->list;
+    isnt $off_the_wall->artist, $mj;
 
     # DELETE from collection
 

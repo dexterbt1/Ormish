@@ -15,9 +15,6 @@ sub check_supported_type_constraint {
 
 sub get_proxy {
     my ($self, $datastore, $attr_name, $obj, $obj_mapping) = @_;
-    my $attr = $obj->meta->get_attribute($attr_name);
-    my $existing_set = $attr->get_raw_value($obj);
-
     my $proxy = Ormish::Relation::OneToMany::SetProxy->new(
         _attr_name          => $attr_name,
         _object             => $obj,
@@ -25,13 +22,6 @@ sub get_proxy {
         _datastore          => $datastore,
         _relation           => $self,
     );
-    # re-insert all items
-    if (defined($existing_set) and not($existing_set->isa(ref($proxy)))) {
-        $proxy->insert($existing_set->members);
-    }
-
-    $datastore->flush;
-    
     return $proxy;
 }
 
