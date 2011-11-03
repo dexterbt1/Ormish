@@ -225,7 +225,18 @@ $ds->register_mapping(
     is scalar(@sql), 1; # delete 
     is $mj->albums->size, 3;
     isnt $off_the_wall->artist, undef;
+
+    ok not($mj->albums->contains($off_the_wall));
     
+    # delete type 2
+    @sql = ();
+    $thriller->artist( undef ); # removes from collection
+    $ds->commit;
+    is scalar(@sql), 1;
+    is $thriller->artist, undef;
+    is scalar(@{$mj->albums}), 2;
+    is $mj->albums->size, 2;
+    ok not($mj->albums->contains($thriller));
 
     #my @artists = $ds->query('Music::Artist|artist', 'albums')->order_by('+{album.release}')->select_objects->list;
     
