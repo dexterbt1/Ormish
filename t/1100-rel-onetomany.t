@@ -185,11 +185,32 @@ $ds->register_mapping(
     foreach my $a ($mj->albums->members) {
         is $a->artist, $mj;        
     }
-    isnt $ds->query('Music::Album')->where('{name} = ?', 'Thriller')->select_objects->first, $mj;
+    my $thriller = $ds->query('Music::Album')->where('{name} = ?', 'Thriller')->select_objects->first;
+    isa_ok $thriller, 'Music::Album';
+    isnt $thriller->artist, $mj;
+
     my ($off_the_wall) = $ds->query('Music::Album')->where('{name} = ?', 'Off The Wall')->select_objects->list;
     isnt $off_the_wall->artist, $mj;
+    $ds->commit;
+
 
     # DELETE from collection
+
+    # add first, so we can test deletes later
+    @sql = ();
+    $mj->albums->insert( $thriller );
+    $ds->commit;
+    is scalar(@sql), 1; # update
+    is $mj->albums->size, 3;
+    is scalar(@{$mj->albums}), 3;
+
+    @sql = ();
+    $off_the_wall->artist( $mj );
+    $ds->commit;
+    is scalar(@sql), 1; # update
+    is $mj->albums->size, 4;
+    is scalar(@{$mj->albums}), 4;
+
 
     #my @artists = $ds->query('Music::Artist|artist', 'albums')->order_by('+{album.release}')->select_objects->list;
     

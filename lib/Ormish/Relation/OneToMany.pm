@@ -71,21 +71,21 @@ __PACKAGE__->meta->make_immutable;
             my $t_ds = Ormish::DataStore::of($t);
             my $t_class = ref($t);
             my $t_mapping = $ds->mapping_of_class($t_class);
+            my $t_reverse_rel = $self->_object_mapping->get_reverse_relation_info($ds, $self->_attr_name);
+            my $reverse_attr = $t_class->meta->get_attribute($t_reverse_rel->{attr_name});
 
             if (defined $t_ds) {
                 (Scalar::Util::refaddr($t_ds) == Scalar::Util::refaddr($ds))
                     or Carp::confess("Cannot insert object bound in another datastore into OneToMany relation");
                 # update
-                $ds->add_dirty($o, $self->_attr_name);
+                $ds->add_dirty($t, $t_reverse_rel->{attr_name});
             }
             else {
                 # insert
-                my $t_reverse_rel = $self->_object_mapping->get_reverse_relation_info($ds, $self->_attr_name);
-                my $attr = $t_class->meta->get_attribute($t_reverse_rel->{attr_name});
                 $ds->add($t); 
-                $attr->set_value($t, $o);
-                1;
             }
+            # NOTE: common pattern: always mark for add() or add_dirty() before mutating a value
+            $reverse_attr->set_value($t, $o);
         }
         $self->invalidate_cache;
         return scalar(@_);
