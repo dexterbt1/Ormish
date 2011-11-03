@@ -91,6 +91,26 @@ __PACKAGE__->meta->make_immutable;
         return scalar(@_);
     }
 
+
+    sub remove {
+        my $self = shift;
+        my $o = $self->_object;
+        my $ds = $self->_datastore;
+        $ds->flush;
+        foreach my $t (@_) {
+            my $t_ds = Ormish::DataStore::of($t);
+            if (defined $t_ds) {
+                (Scalar::Util::refaddr($t_ds) == Scalar::Util::refaddr($ds))
+                    or Carp::confess("Cannot insert object bound in another datastore into OneToMany relation");
+                # update
+                $ds->delete($t);
+            }
+        }
+        $self->invalidate_cache;
+        return scalar(@_);
+    }
+
+
     sub invalidate_cache {
         $_[0]->_cached_set_clear;
     }

@@ -219,16 +219,13 @@ $ds->register_mapping(
     # DELETE from collection
 
     # delete type 1
-=pod
     @sql = ();
     $mj->albums->remove( $off_the_wall );
     $ds->commit;
     is scalar(@sql), 1; # delete 
     is $mj->albums->size, 3;
-    is $off_the_
-=cut
+    isnt $off_the_wall->artist, undef;
     
-
 
     #my @artists = $ds->query('Music::Artist|artist', 'albums')->order_by('+{album.release}')->select_objects->list;
     
