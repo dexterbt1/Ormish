@@ -124,9 +124,10 @@ sub _setup_relations {
 
 sub get_reverse_relation_info {
     my ($self, $datastore, $rel_name) = @_; 
-    if (exists $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name}) {
+    if (exists $self->_reverse_rel->{$rel_name}) {
         # cache this call (memoize)
-        return $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name};
+        # FIXME: this is fragile, if we reuse the same instance across datastores with DIFFERENT group of mappings
+        return $self->_reverse_rel->{$rel_name};
     }
     my $ret;
     my $rel = $self->relations->{$rel_name};
@@ -145,7 +146,7 @@ sub get_reverse_relation_info {
                 attr_name       => $to_class_attr_name,
                 mapping         => $to_class_mapping,
             };
-            $self->_reverse_rel->{Scalar::Util::refaddr($datastore)}->{$rel_name} = $ret;
+            $self->_reverse_rel->{$rel_name} = $ret;
         }
     }
     ($found < 2) # TODO: support this later
