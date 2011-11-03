@@ -118,17 +118,18 @@ __PACKAGE__->meta->make_immutable;
 
         # support single primary-keys for now
         (scalar(@t_oid_attrs)==1)
-            or Carp::confess("Unsupported oid column count for class '$rev_class'");
+            or Carp::confess("Unsupported composite oid columns for class '$rev_class'");
 
         my $t_oid = $rev_rel_info->{mapping}->oid;
         my ($pk) = @t_oid_attrs;
 
         my $q = $self->get_query;
-        my ($row) = $self->get_query
-                         ->where("{$pk} IN (??)", map { values %{$t_oid->attr_values($_)} } @thingies)
-                         ->select_rows(['COUNT(1)|c'])
-                         ->list
-                         ;
+        my $qmarks = join ',', ('?') x scalar(@thingies);
+        my $row  = $self->get_query
+                        ->where("{$pk} IN ($qmarks)", map { values %{$t_oid->attr_values($_)} } @thingies)
+                        ->select_rows(['COUNT(1)|c'])
+                        ->first
+                        ;
         return ($row->{c} == scalar(@thingies));
     }
     

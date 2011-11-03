@@ -212,8 +212,8 @@ $ds->register_mapping(
     # includes!
     @sql = ();
     is $off_the_wall->artist, $mj;
-    #ok $mj->albums->contains($off_the_wall);
-    #is scalar(@sql), 1; # select
+    ok $mj->albums->contains($off_the_wall);
+    is scalar(@sql), 1; # select
 
 
     # DELETE from collection
