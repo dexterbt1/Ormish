@@ -54,7 +54,7 @@ __PACKAGE__->meta->make_immutable;
     has '_relation'         => (is => 'rw', does => 'Ormish::Relation::Role');
     has '_cached_set'       => (is => 'rw', isa => 'Set::Object', predicate => '_has_cached_set', clearer => '_cached_set_clear');
 
-    for (qw/ union equal /) {
+    for (qw/ weaken is_weak strengthen invert union equal /) {
         override $_ => sub {
             Carp::confess("Unimplemented functionality");
         }; 

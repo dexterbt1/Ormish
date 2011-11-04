@@ -238,6 +238,9 @@ $ds->register_mapping(
     is $mj->albums->size, 2;
     ok not($mj->albums->contains($thriller));
 
+    1;
+    1;
+
     #my @artists = $ds->query('Music::Artist|artist', 'albums')->order_by('+{album.release}')->select_objects->list;
     
 }
