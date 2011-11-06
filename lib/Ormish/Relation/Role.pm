@@ -2,7 +2,8 @@
     package Ormish::Relation::Role;
     use Moose::Role;
 
-    has 'to_class'      => (is => 'ro', isa => 'Str', required => 1);
+    has 'to_class'          => (is => 'ro', isa => 'Str', required => 1);
+    has 'reverse_relation'  => (is => 'rw', isa => 'Str', predicate => 'has_reverse_hint');
 
     requires 'is_collection';
 

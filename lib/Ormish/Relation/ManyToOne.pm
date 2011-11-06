@@ -11,8 +11,10 @@ sub check_supported_type_constraint {
     # strongly impose associations for now (i.e. NULLable FKs)
     # FIXME: inheritance and composition will not require this
     my $attr = $class->meta->get_attribute($attr_name);
-    $attr->type_constraint->check(undef)
-        or Carp::confess("Expected 'Undef' to be included in type constraint of attribute '$attr_name' in class '$class'");
+    if (not $attr->is_required) {
+        $attr->type_constraint->check(undef)
+            or Carp::confess("Expected 'Undef' to be included in type constraints of '$attr_name' in class '$class'");
+    }
 }
 
 sub get_proxy {

@@ -129,28 +129,40 @@ sub get_reverse_relation_info {
         # FIXME: this is fragile, if we reuse the same instance across datastores with DIFFERENT group of mappings
         return $self->_reverse_rel->{$rel_name};
     }
-    my $ret;
     my $rel = $self->relations->{$rel_name};
     my $to_class = $rel->to_class;
     my $to_class_mapping = $datastore->mapping_of_class($to_class);
     my $to_class_relations = $to_class_mapping->relations;
     my $from_class = $self->for_class;
-    my $found = 0;
+    my @found = ();
     foreach my $to_class_attr_name (keys %$to_class_relations) {
         my $to_class_rel = $to_class_relations->{$to_class_attr_name};
         # TODO: support multiple reverse_rel
         if ($to_class_rel->to_class eq $from_class) {
-            $found++;
-            $ret = { 
+            push @found, { 
                 rel             => $to_class_rel, 
                 attr_name       => $to_class_attr_name,
                 mapping         => $to_class_mapping,
             };
-            $self->_reverse_rel->{$rel_name} = $ret;
         }
     }
-    ($found < 2) # TODO: support this later
-        or Carp::confess("Ambiguous reverse relation in '$to_class' when resolving '$from_class'");
+    my ($ret,) = @found;
+    if (scalar(@found) >= 2) {
+        # use hints
+        my $reverse_found = 0;
+        foreach my $f (@found) {
+            if ($f->{rel}->has_reverse_hint) {
+                if ($f->{rel}->reverse_relation eq $rel_name) {
+                    $ret = $f;
+                    $reverse_found = 1;
+                    last;
+                }
+            }
+        }
+        ($reverse_found)
+            or Carp::confess("Ambiguous reverse relation '$rel_name' in '$to_class' when resolving '$from_class'");
+    }
+    $self->_reverse_rel->{$rel_name} = $ret;
     return $ret;
 }
 

@@ -34,6 +34,7 @@ my %classes_with_hooks = ();
 sub of { # ---Function
     my ($obj) = @_;
     return if (not defined $obj);
+    return if (not ref($obj));
     my $addr = Scalar::Util::refaddr($obj);
     return (exists $store_of{$addr}) ? $store_of{$addr} : undef;
 }
@@ -458,9 +459,9 @@ sub _add_class_hooks {
                 my $o = shift @_;
                 if (scalar @_ > 0) {
                     my $st = Ormish::DataStore::of($o); 
-                    my $new_val = $_[0];
-                    my $old_val = $mod_attr->get_raw_value($o);
-                    if ($st) {
+                    if (defined $st) {
+                        my $new_val = $_[0];
+                        my $old_val = $mod_attr->get_raw_value($o);
                         $st->add_dirty($o, $mod_attr->name);
                     }
                 }
