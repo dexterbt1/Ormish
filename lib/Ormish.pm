@@ -10,11 +10,12 @@ use Ormish::DataStore;
 
 use Ormish::Mapping;
 
-use Ormish::OID::Auto;
-use Ormish::OID::Natural;
+use Ormish::Mapping::OID::Auto;
+use Ormish::Mapping::OID::Natural;
 
-use Ormish::Relation::OneToMany;
-use Ormish::Relation::ManyToOne;
+use Ormish::Mapping::Relation::OneToMany;
+use Ormish::Mapping::Relation::ManyToOne;
+
 
 1; # End of Ormish
 
@@ -22,7 +23,7 @@ __END__
 
 =head1 NAME
 
-Ormish - an alternative object relational mapper
+Ormish - an object relational data mapper for Moose
 
 =head1 SYNOPSIS
 

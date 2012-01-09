@@ -1,4 +1,4 @@
-package Ormish::OID::BaseRole;
+package Ormish::Mapping::OID::Role;
 use Moose::Role;
 
 has 'install_attributes'     => (is => 'ro', isa => 'Bool', default => 0);

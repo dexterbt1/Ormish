@@ -43,31 +43,20 @@ $ds->register_mapping(
         Ormish::Mapping->new(
             for_class       => 'Music::Artist',
             table           => 'artist',
-            oid             => Ormish::OID::Serial->new( attribute => 'id', install_attributes => 1 ),
-            attributes      => [
-                Ormish::Mapping::Attribute->new( name => 'name' ),
-                Ormish::Mapping::Attribute->new( 
-                    name        => 'albums',
-                    relation    => Ormish::Relation::OneToMany->new( 
-                        to_class        => 'Music::Album',
-                    ),
-                ),
-            ],
+            oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
+            attributes      => {
+                name            => Ormish::Mapping::Attribute->new,
+                albums          => Ormish::Mapping::Relation::OneToMany->new( to_class => 'Music::Album' ),
+            },
         ),
         Ormish::Mapping->new(
             for_class       => 'Music::Album',
             table           => 'album',
-            oid             => Ormish::OID::Serial->new( attribute => 'id', install_attributes => 1 ),
-            attributes      => [ 
-                Ormish::Mapping::Attribute->new( name => 'name' ),
-                Ormish::Mapping::Attribute->new( 
-                    name        => 'artist', 
-                    relation    => Ormish::Relation::ManyToOne->new( 
-                        to_class        => 'Music::Artist', 
-                        join_columns    => { artist_id => 'id' },
-                    ),
-                ),
-            ],
+            oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
+            attributes      => {
+                name            => Ormish::Mapping::Attribute->new,
+                albums          => Ormish::Mapping::Relation::ManyToOne->new( to_class => 'Music::Artist', join => { artist_id => 'id' } ),
+            },
         ),
     ],
 );

@@ -9,7 +9,7 @@ use DBIx::Simple;
 use Ormish::Engine::DBI::ResultObjects;
 use Ormish::Engine::DBI::ResultRows;
 
-with 'Ormish::Engine::BaseRole';
+with 'Ormish::Engine::Role';
 
 has 'dbh'           => (is          => 'ro', 
                         isa         => 'DBI::db', 

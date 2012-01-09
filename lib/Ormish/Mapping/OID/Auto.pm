@@ -1,11 +1,11 @@
-package Ormish::OID::Auto;
+package Ormish::Mapping::OID::Auto;
 use Moose;
 use namespace::autoclean;
 
 use Scalar::Util ();
 use Carp ();
 
-with 'Ormish::OID::BaseRole';
+with 'Ormish::Mapping::OID::Role';
 
 has 'attribute'     => (is => 'ro', isa => 'Str', required => 1);
 

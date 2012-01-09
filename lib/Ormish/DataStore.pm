@@ -9,7 +9,7 @@ use YAML;
 
 use Ormish::Query;
 
-has 'engine'                => (is => 'ro', isa => 'Ormish::Engine::BaseRole', );
+has 'engine'                => (is => 'ro', does => 'Ormish::Engine::Role', );
 has 'auto_register'         => (is => 'ro', isa => 'Bool', default => sub { 0 });
 has 'auto_register_method'  => (is => 'rw', isa => 'Str', default => sub { '_ORMISH_MAPPING' } );
 has 'debug_log'             => (is => 'rw', isa => 'ArrayRef', default => sub { [] });
@@ -155,7 +155,7 @@ sub add_dirty_collection {
     my $reverse_rel = $o_m->get_reverse_relation_info($self, $rel_attr->name);
     my $reverse_class = $reverse_rel->{mapping}->for_class;
     my $reverse_attr = $reverse_class->meta->get_attribute($reverse_rel->{attr_name});
-    if ($new_val->can('does') && $new_val->does('Ormish::Relation::Proxy::Role')) {
+    if ($new_val->can('does') && $new_val->does('Ormish::Mapping::Relation::Proxy::Role')) {
         Carp::confess("Assert: unsupported operation");
     }
     else {
@@ -183,7 +183,7 @@ sub add_dirty_collection {
         $_[4] = $proxy; # substitute!
     }
 
-    if ($old_val->can('does') && $old_val->does('Ormish::Relation::Proxy::Role')) {
+    if ($old_val->can('does') && $old_val->does('Ormish::Mapping::Relation::Proxy::Role')) {
         $old_val->invalidate_cache() if ($old_val->can('invalidate_cache'));
     }
 }

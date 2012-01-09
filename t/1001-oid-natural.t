@@ -9,7 +9,7 @@
         return Ormish::Mapping->new( 
             for_class           => __PACKAGE__,
             table               => 'person',
-            oid                 => Ormish::OID::Natural->new( attribute => 'ssn' ),
+            oid                 => Ormish::Mapping::OID::Natural->new( attribute => 'ssn' ),
             attributes          => [qw/ 
                 ssn|soc_sec_num 
                 name 

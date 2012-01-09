@@ -4,7 +4,7 @@ use namespace::autoclean;
 
 use Carp ();
 
-with 'Ormish::Query::Result::BaseRole';
+with 'Ormish::Query::Result::Role';
 
 extends 'Ormish::Engine::DBI::ResultRows';
 

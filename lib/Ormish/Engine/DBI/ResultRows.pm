@@ -4,7 +4,7 @@ use namespace::autoclean;
 
 use Carp ();
 
-with 'Ormish::Query::Result::BaseRole';
+with 'Ormish::Query::Result::Role';
 
 # depend on DBIx::Simple-style interface for now
 has '_engine_result'    => (is => 'rw', isa => 'Any', writer => '_set_engine_result', predicate => '_has_engine_result');

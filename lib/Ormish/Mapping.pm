@@ -6,7 +6,7 @@ use Scalar::Util ();
 use Carp ();
 
 has 'table'         => (is => 'ro', isa => 'Str', required => 1);
-has 'oid'           => (is => 'ro', does => 'Ormish::OID::BaseRole', required => 1);
+has 'oid'           => (is => 'ro', does => 'Ormish::Mapping::OID::Role', required => 1);
 has 'for_class'     => (is => 'ro', isa => 'Str', predicate => 'has_for_class');
 has 'attributes'    => (is => 'ro', isa => 'ArrayRef', required => 1);
 has 'relations'     => (is => 'ro', isa => 'HashRef', default => sub { { } });

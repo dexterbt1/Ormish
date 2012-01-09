@@ -1,10 +1,10 @@
-package Ormish::Relation::OneToMany;
+package Ormish::Mapping::Relation::OneToMany;
 use Moose;
 use namespace::autoclean;
 use Carp ();
 use Set::Object ();
 
-with 'Ormish::Relation::Role';
+with 'Ormish::Mapping::Relation::Role';
 
 sub check_supported_type_constraint {
     my ($self, $class, $attr_name) = @_;
@@ -15,7 +15,7 @@ sub check_supported_type_constraint {
 
 sub get_proxy {
     my ($self, $datastore, $attr_name, $obj, $obj_mapping) = @_;
-    my $proxy = Ormish::Relation::OneToMany::SetProxy->new(
+    my $proxy = Ormish::Mapping::Relation::OneToMany::SetProxy->new(
         _attr_name          => $attr_name,
         _object             => $obj,
         _object_mapping     => $obj_mapping,
@@ -32,7 +32,7 @@ sub is_collection { 1 }
 __PACKAGE__->meta->make_immutable;
 
 {
-    package Ormish::Relation::OneToMany::SetProxy;
+    package Ormish::Mapping::Relation::OneToMany::SetProxy;
     use Moose;
     use MooseX::NonMoose;
     use MooseX::InsideOut;
@@ -43,7 +43,7 @@ __PACKAGE__->meta->make_immutable;
 
     use Ormish::Query;
 
-    with 'Ormish::Relation::Proxy::Role';
+    with 'Ormish::Mapping::Relation::Proxy::Role';
 
     extends 'Set::Object';
 
@@ -51,7 +51,7 @@ __PACKAGE__->meta->make_immutable;
     has '_object'           => (is => 'rw', isa => 'Object', weak_ref => 1); # in OneToMany, this is the MANY part, as a Set::Object
     has '_object_mapping'   => (is => 'rw', isa => 'Ormish::Mapping');
     has '_datastore'        => (is => 'rw', isa => 'Ormish::DataStore', weak_ref => 1);
-    has '_relation'         => (is => 'rw', does => 'Ormish::Relation::Role');
+    has '_relation'         => (is => 'rw', does => 'Ormish::Mapping::Relation::Role');
     has '_cached_set'       => (is => 'rw', isa => 'Set::Object', predicate => '_has_cached_set', clearer => '_cached_set_clear');
 
     for (qw/ weaken is_weak strengthen invert union equal /) {

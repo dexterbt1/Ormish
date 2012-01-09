@@ -12,11 +12,11 @@
         Ormish::Mapping->new(
             for_class       => __PACKAGE__,
             table           => 'node',
-            oid             => Ormish::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
+            oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             attributes      => [qw/ name parent|parent_id=id /],
             relations       => {
-                parent          => Ormish::Relation::ManyToOne->new( to_class => __PACKAGE__, reverse_relation => 'children' ),
-                children        => Ormish::Relation::OneToMany->new( to_class => __PACKAGE__, reverse_relation => 'parent' ),    
+                parent          => Ormish::Mapping::Relation::ManyToOne->new( to_class => __PACKAGE__, reverse_relation => 'children' ),
+                children        => Ormish::Mapping::Relation::OneToMany->new( to_class => __PACKAGE__, reverse_relation => 'parent' ),    
             },
         );
     }

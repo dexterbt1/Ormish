@@ -44,18 +44,18 @@ $ds->register_mapping(
             for_class       => 'Music::Artist',
             table           => 'artist',
             attributes      => [ qw/ name / ],
-            oid             => Ormish::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
+            oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             relations       => {
-                albums          => Ormish::Relation::OneToMany->new( to_class => 'Music::Album' ),
+                albums          => Ormish::Mapping::Relation::OneToMany->new( to_class => 'Music::Album' ),
             },
         ),
         Ormish::Mapping->new(
             for_class       => 'Music::Album',
             table           => 'album',
             attributes      => [ qw/ name artist|artist_id=id / ],
-            oid             => Ormish::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
+            oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             relations       => {
-                artist          => Ormish::Relation::ManyToOne->new( to_class => 'Music::Artist' ),
+                artist          => Ormish::Mapping::Relation::ManyToOne->new( to_class => 'Music::Artist' ),
             },
         ),
     ],

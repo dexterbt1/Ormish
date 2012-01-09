@@ -22,6 +22,7 @@ implicit joins
 many to many
 value object inflation/deflation/criteria (DateTime)
 group_by
+auto_reflect
 having
 cyclic
 subqueries

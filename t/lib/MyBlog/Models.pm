@@ -21,9 +21,9 @@
                 title
                 tagline|c_tag_line
             /],
-            oid             => Ormish::OID::Auto->new( attribute => 'id' ),
+            oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id' ),
             relations       => {
-                posts           => Ormish::Relation::OneToMany->new( to_class => 'My::Post' ),
+                posts           => Ormish::Mapping::Relation::OneToMany->new( to_class => 'My::Post' ),
             },
         );
     }
@@ -48,9 +48,9 @@
                 content
                 parent_blog|parent_blog_id=id
             /],
-            oid             => Ormish::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
+            oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             relations       => {
-                parent_blog     => Ormish::Relation::ManyToOne->new( to_class => 'My::Blog' ),
+                parent_blog     => Ormish::Mapping::Relation::ManyToOne->new( to_class => 'My::Blog' ),
             },
         );
     }

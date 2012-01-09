@@ -1,4 +1,4 @@
-package Ormish::Engine::BaseRole;
+package Ormish::Engine::Role;
 use Moose::Role;
 
 requires qw/

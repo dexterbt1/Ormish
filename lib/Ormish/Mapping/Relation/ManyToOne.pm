@@ -1,10 +1,10 @@
-package Ormish::Relation::ManyToOne;
+package Ormish::Mapping::Relation::ManyToOne;
 use Moose;
 use namespace::autoclean;
 use Carp ();
 use Scalar::Util ();
 
-with 'Ormish::Relation::Role';
+with 'Ormish::Mapping::Relation::Role';
 
 sub check_supported_type_constraint {
     my ($self, $class, $attr_name) = @_;
@@ -20,7 +20,7 @@ sub check_supported_type_constraint {
 sub get_proxy {
     my ($self, $datastore, $attr_name, $obj, $obj_mapping) = @_;
     my $t = Scalar::Util::refaddr($obj);
-    my $proxy = tie $t, 'Ormish::Relation::ManyToOne::TiedObjectProxy', {
+    my $proxy = tie $t, 'Ormish::Mapping::Relation::ManyToOne::TiedObjectProxy', {
         _attr_name          => $attr_name,
         _object             => $obj,
         _object_mapping     => $obj_mapping,
@@ -39,18 +39,18 @@ __PACKAGE__->meta->make_immutable;
 # --------------------
 
 {
-    package Ormish::Relation::ManyToOne::TiedObjectProxy;
+    package Ormish::Mapping::Relation::ManyToOne::TiedObjectProxy;
     use Moose;
     use MooseX::InsideOut;
     use Carp ();
     use Scalar::Util ();
 
-    with 'Ormish::Relation::Proxy::Role';
+    with 'Ormish::Mapping::Relation::Proxy::Role';
 
     has '_attr_name'        => (is => 'rw', isa => 'Str');
     has '_object'           => (is => 'rw', isa => 'Object|HashRef', weak_ref => 1); # in ManyToOne, this is the ONE part
     has '_object_mapping'   => (is => 'rw', isa => 'Ormish::Mapping');
-    has '_relation'         => (is => 'rw', does => 'Ormish::Relation::Role');
+    has '_relation'         => (is => 'rw', does => 'Ormish::Mapping::Relation::Role');
     has '_datastore'        => (is => 'rw', isa => 'Ormish::DataStore', weak_ref => 1);
     has '_cached_object'    => (is => 'rw', isa => 'Object', weak_ref => 1, predicate => '_has_cached_object');
 
