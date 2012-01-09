@@ -1,4 +1,4 @@
-package Ormish::OID::Serial;
+package Ormish::OID::Auto;
 use Moose;
 use namespace::autoclean;
 

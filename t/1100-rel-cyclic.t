@@ -12,7 +12,7 @@
         Ormish::Mapping->new(
             for_class       => __PACKAGE__,
             table           => 'node',
-            oid             => Ormish::OID::Serial->new( attribute => 'id', install_attributes => 1 ),
+            oid             => Ormish::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             attributes      => [qw/ name parent|parent_id=id /],
             relations       => {
                 parent          => Ormish::Relation::ManyToOne->new( to_class => __PACKAGE__, reverse_relation => 'children' ),

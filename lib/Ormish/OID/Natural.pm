@@ -1,8 +1,8 @@
 package Ormish::OID::Natural;
 use Moose;
-use Ormish::OID::Serial;
+use Ormish::OID::Auto;
 
-extends 'Ormish::OID::Serial';
+extends 'Ormish::OID::Auto';
 
 sub is_db_generated { 0 }
 

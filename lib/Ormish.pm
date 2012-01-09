@@ -10,7 +10,7 @@ use Ormish::DataStore;
 
 use Ormish::Mapping;
 
-use Ormish::OID::Serial;
+use Ormish::OID::Auto;
 use Ormish::OID::Natural;
 
 use Ormish::Relation::OneToMany;
