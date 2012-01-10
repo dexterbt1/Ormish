@@ -11,7 +11,7 @@
             table               => 'person',
             oid                 => Ormish::Mapping::OID::Natural->new( attribute => 'ssn' ),
             attributes          => [qw/ 
-                ssn|soc_sec_num 
+                ssn:soc_sec_num 
                 name 
             /],
         );

@@ -13,7 +13,7 @@
             for_class       => __PACKAGE__,
             table           => 'node',
             oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
-            attributes      => [qw/ name parent|parent_id=id /],
+            attributes      => [qw/ name parent:parent_id=id /],
             relations       => {
                 parent          => Ormish::Mapping::Relation::ManyToOne->new( to_class => __PACKAGE__, reverse_relation => 'children' ),
                 children        => Ormish::Mapping::Relation::OneToMany->new( to_class => __PACKAGE__, reverse_relation => 'parent' ),    

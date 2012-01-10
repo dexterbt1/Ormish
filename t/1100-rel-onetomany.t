@@ -52,7 +52,7 @@ $ds->register_mapping(
         Ormish::Mapping->new(
             for_class       => 'Music::Album',
             table           => 'album',
-            attributes      => [ qw/ name artist|artist_id=id / ],
+            attributes      => [ qw/ name artist:artist_id=id / ],
             oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             relations       => {
                 artist          => Ormish::Mapping::Relation::ManyToOne->new( to_class => 'Music::Artist' ),

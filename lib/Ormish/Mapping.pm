@@ -55,7 +55,7 @@ sub _setup_attrs {
             or Carp::confess("Undeclared attribute '$oid_attr' in class '$class'");
     } 
     foreach my $at (@$attr_name_or_aliases) {
-        my ($meth, $col) = split /\|/, $at, 2;
+        my ($meth, $col) = split /:/, $at, 2;
         if (not $col) {
             $col = $meth;
         }

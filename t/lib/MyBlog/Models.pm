@@ -16,10 +16,10 @@
             for_class       => __PACKAGE__,
             table           => 'blog_blog',
             attributes      => [qw/
-                id|b_id
+                id:b_id
                 name 
                 title
-                tagline|c_tag_line
+                tagline:c_tag_line
             /],
             oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id' ),
             relations       => {
@@ -46,7 +46,7 @@
             attributes      => [qw/
                 title
                 content
-                parent_blog|parent_blog_id=id
+                parent_blog:parent_blog_id=id
             /],
             oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             relations       => {
