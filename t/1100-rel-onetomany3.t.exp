@@ -45,7 +45,7 @@ $ds->register_mapping(
             table           => 'artist',
             oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             attributes      => {
-                name            => Ormish::Mapping::Attribute->new,
+                name            => Ormish::Mapping::Attribute->new( column => 'name' ),
                 albums          => Ormish::Mapping::Relation::OneToMany->new( to_class => 'Music::Album' ),
             },
         ),
@@ -54,7 +54,7 @@ $ds->register_mapping(
             table           => 'album',
             oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id', install_attributes => 1 ),
             attributes      => {
-                name            => Ormish::Mapping::Attribute->new,
+                name            => Ormish::Mapping::Attribute->new( column => 'name' ),
                 albums          => Ormish::Mapping::Relation::ManyToOne->new( to_class => 'Music::Artist', join => { artist_id => 'id' } ),
             },
         ),

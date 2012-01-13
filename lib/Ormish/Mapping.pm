@@ -5,16 +5,23 @@ use namespace::autoclean;
 use Scalar::Util ();
 use Carp ();
 
+use Ormish::Mapping::Hook::Role;
+
 has 'table'         => (is => 'ro', isa => 'Str', required => 1);
 has 'oid'           => (is => 'ro', does => 'Ormish::Mapping::OID::Role', required => 1);
 has 'for_class'     => (is => 'ro', isa => 'Str', predicate => 'has_for_class');
-has 'attributes'    => (is => 'ro', isa => 'ArrayRef', required => 1);
+
 has 'relations'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
-has '_attr2col'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
-has '_col2attr'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
-has '_oid_attr2col' => (is => 'ro', isa => 'HashRef', default => sub { { } });
-has '_oid_col2attr' => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has 'hooks'         => (is => 'ro', isa => 'ArrayRef[Ormish::Mapping::Hook::Role]', predicate => 'has_hooks');
+
+# DSL attr for auto defining simple attributes-to-column mapping
+has 'attributes'    => (is => 'ro', isa => 'ArrayRef', default => sub { [ ] });
+
+has 'attr2col'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has 'col2attr'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has 'oid_attr2col' => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has 'oid_col2attr' => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
 has '_reverse_rel'      => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
@@ -54,6 +61,7 @@ sub _setup_attrs {
         $class->meta->has_attribute($oid_attr)
             or Carp::confess("Undeclared attribute '$oid_attr' in class '$class'");
     } 
+
     foreach my $at (@$attr_name_or_aliases) {
         my ($meth, $col) = split /:/, $at, 2;
         if (not $col) {
@@ -88,10 +96,11 @@ sub _setup_attrs {
         }
     }
 
-    %{$self->_attr2col} = %a2c;
-    %{$self->_col2attr} = %c2a;
-    %{$self->_oid_attr2col} = %oid_a2c;
-    %{$self->_oid_col2attr} = %oid_c2a;
+
+    %{$self->attr2col} = %a2c;
+    %{$self->col2attr} = %c2a;
+    %{$self->oid_attr2col} = %oid_a2c;
+    %{$self->oid_col2attr} = %oid_c2a;
     $self->meta->get_attribute('attributes')->set_raw_value($self, \@attributes);
 }
 
@@ -168,18 +177,24 @@ sub get_reverse_relation_info {
 
 
 sub oid_attr_to_col {
-    return $_[0]->_oid_attr2col;
+    return $_[0]->oid_attr2col;
 }
 sub oid_col_to_attr {
-    return $_[0]->_oid_col2attr;
+    return $_[0]->oid_col2attr;
 }
 
 sub attr_to_col {
     my ($self, $exclude_oid) = @_;
-    my %h = %{$self->_attr2col};
+    my %hooks_a2c = ();
+    if ($self->has_hooks) {
+        foreach my $hook (@{$self->hooks}) {
+            %hooks_a2c = (%hooks_a2c, $hook->get_attr_to_col);
+        }
+    }
+    my %h = ( %{$self->attr2col}, %hooks_a2c );
     my %oid_h = ();
     if ($exclude_oid) {
-        my $oid_attr2col = $self->_oid_attr2col;
+        my $oid_attr2col = $self->oid_attr2col;
         foreach my $attr (keys %$oid_attr2col) {
             delete $h{$attr};
         }
@@ -189,9 +204,9 @@ sub attr_to_col {
 
 sub col_to_attr {
     my ($self, $exclude_oid) = @_;
-    my %h = %{$self->_col2attr}; # copy
+    my %h = %{$self->col2attr}; # copy
     if ($exclude_oid) {
-        my $oid_col2attr = $self->_oid_col2attr;
+        my $oid_col2attr = $self->oid_col2attr;
         foreach my $col (keys %$oid_col2attr) {
             delete $h{$col};
         }
@@ -205,7 +220,7 @@ sub related_object_oid_col_values {
     my $rel_class       = $rel->to_class;
     my $fk_mapping      = $datastore->mapping_of_class($rel_class);
     my $fk_oid_values   = $fk_mapping->oid->attr_values($rel_obj);
-    my $attr_to_col     = $self->_attr2col;
+    my $attr_to_col     = $self->attr2col;
     my $col             = $attr_to_col->{$relation_name};
 
     my %col_to_fk_values = ();
@@ -219,10 +234,11 @@ sub related_object_oid_col_values {
 
 sub object_insert_table_rows {
     my ($self, $datastore, $obj) = @_;
+    my %table_rows = ();
     my @rows = ();
     {
-        my $attr_to_col     = $self->_attr2col;
-        my $oid_attr_to_col = $self->_oid_attr2col;
+        my $attr_to_col     = $self->attr2col;
+        my $oid_attr_to_col = $self->oid_attr2col;
         my %row = ();
         my %where = ();
         my $oid_is_db_generated = $self->oid->is_db_generated;
@@ -252,20 +268,29 @@ sub object_insert_table_rows {
                 $row{$col}  = $v;
             }
         }
+        
         # ---
-        push @rows, [ \%row, \%where ];
+        $table_rows{$self->table} = [ [ \%row, \%where ] ];
     }
-    return { 
-        $self->table() => \@rows,
-    };
+    # run hooks
+    {
+        if ($self->has_hooks) {
+            foreach my $hook (@{$self->hooks}) {
+                if ($hook->can('after_object_insert_table_rows')) {
+                    $hook->after_object_insert_table_rows($self, \%table_rows, $datastore, $obj);
+                }
+            }
+        }
+    }
+    return \%table_rows;
 }
 
 sub object_update_table_rows {
     my ($self, $datastore, $obj, $obj_oid_attr_values) = @_;
     my @rows = ();
     {
-        my $attr_to_col     = $self->_attr2col;
-        my $oid_attr_to_col = $self->_oid_attr2col;
+        my $attr_to_col     = $self->attr2col;
+        my $oid_attr_to_col = $self->oid_attr2col;
         my $oid_is_db_generated = $self->oid->is_db_generated;
         my %row = ();
         foreach my $at (keys %$attr_to_col) {
@@ -306,6 +331,24 @@ sub object_update_table_rows {
     return { 
         $self->table() => \@rows,
     };
+}
+
+
+# return { table1 => [ col1, col2, ... ], ... }
+sub table_columns_for_select { 
+    my ($self) = @_;
+    my %tc = ( );
+    my $table = $self->table;
+    $tc{$table} = [ keys %{$self->attr_to_col} ];
+    if ($self->has_hooks) {
+        foreach my $hook (@{$self->hooks}) {
+            if ($hook->can('after_table_columns_for_select')) {
+                $hook->after_table_columns_for_select($self, \%tc);
+            }
+        }
+    }
+    
+    return \%tc;
 }
 
 

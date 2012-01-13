@@ -13,6 +13,12 @@ perl: DBIx::Simple, DBIx::DataModel, DBIx::Class
 python: SQLAlchemy, Storm, Django
 java: Hibernate, JPA
 
+FEATURES
+--------
+Data Mapper
+Unit of Work
+
+
 TODO
 ----
 order_by
