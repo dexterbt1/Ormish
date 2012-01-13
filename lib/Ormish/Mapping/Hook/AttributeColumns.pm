@@ -17,12 +17,9 @@ sub after_table_columns_for_select {
     my ($self, $mapping, %tcols) = @_;
     my $table = $mapping->table;
     if (not exists $tcols{$table}) {
-        $tcols{$table} = [ ];
+        $tcols{$table} = { };
     }
-    my @all_cols = values %{$self->attr_to_col};
-    foreach my $c (@all_cols) {
-    }
-    push @{$tcols{$table}}, $
+    %{$tcols{$table}} = (%{$tcols{$table}}, map { $_ => 1 } %{$self->attr_to_col});
     return  
 }
 

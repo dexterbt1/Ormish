@@ -334,12 +334,12 @@ sub object_update_table_rows {
 }
 
 
-# return { table1 => [ col1, col2, ... ], ... }
+# return { table1 => { col1 => 1, col2 => 1, ... }, ... }
 sub table_columns_for_select { 
     my ($self) = @_;
     my %tc = ( );
     my $table = $self->table;
-    $tc{$table} = [ keys %{$self->attr_to_col} ];
+    $tc{$table} = { map { $_ => 1 } keys %{$self->attr_to_col} };
     if ($self->has_hooks) {
         foreach my $hook (@{$self->hooks}) {
             if ($hook->can('after_table_columns_for_select')) {
@@ -347,7 +347,6 @@ sub table_columns_for_select {
             }
         }
     }
-    
     return \%tc;
 }
 

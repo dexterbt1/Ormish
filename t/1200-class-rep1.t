@@ -61,7 +61,7 @@ $ds->register_mapping(
 {
     # CRUD tests
     ok 1;
-    my $o;
+    my ($o, $p);
 
     # insert
     my $steve = My::Employee->new(name => 'Steve Jobz', start_date => DateTime->new(year => 1971, month => 4, day => 1), );
@@ -78,6 +78,10 @@ $ds->register_mapping(
     # update
     $steve->name('Steve Jobs');
     $ds->commit;
+
+    ($p) = $ds->query('My::Employee')->where('{name} LIKE ?', 'Steve%')->select_objects->list;
+    is $p, $steve;
+    
 
 
     ok 1;
