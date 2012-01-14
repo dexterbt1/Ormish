@@ -24,19 +24,19 @@ use lib "$FindBin::Bin/lib";
 
 
 my $dbh = DBI->connect("DBI:SQLite:dbname=:memory:","","",{ RaiseError => 1, AutoCommit => 0 });
-$dbh->do('CREATE TABLE emp (id INTEGER PRIMARY KEY, emp_name VARCHAR, emp_start_date DATE)');
+$dbh->do('CREATE TABLE emp1 (id INTEGER PRIMARY KEY, emp_name VARCHAR, emp_start_date DATE)');
 $dbh->commit;
 
 my @sql = ();
-my $ds = Ormish::DataStore->new( 
+my $ds1 = Ormish::DataStore->new( 
     engine          => Ormish::Engine::DBI->new( dbh => $dbh, log_sql => \@sql ), 
 );
 
-$ds->register_mapping( 
+$ds1->register_mapping( 
     [
         Ormish::Mapping->new(
             for_class       => 'My::Employee',
-            table           => 'emp',
+            table           => 'emp1',
             oid             => Ormish::Mapping::OID::Auto->new( attribute => 'id' ),
             hooks           => [
                 Ormish::Mapping::Hook::AttributeColumns->new(
@@ -65,11 +65,11 @@ $ds->register_mapping(
 
     # insert
     my $steve = My::Employee->new(name => 'Steve Jobz', start_date => DateTime->new(year => 1971, month => 4, day => 1), );
-    $ds->add($steve);
-    $ds->commit;
+    $ds1->add($steve);
+    $ds1->commit;
 
     # select
-    ($o) = $ds->query('My::Employee')->where('{name} LIKE ?', 'Steve%')->select_objects->list;
+    ($o) = $ds1->query('My::Employee')->where('{name} LIKE ?', 'Steve%')->select_objects->list;
     is $o, $steve;
     is $o->start_date->year, 1971;
     is $o->start_date->month, 4;
@@ -77,11 +77,10 @@ $ds->register_mapping(
 
     # update
     $steve->name('Steve Jobs');
-    $ds->commit;
+    $ds1->commit;
 
-    ($p) = $ds->query('My::Employee')->where('{name} LIKE ?', 'Steve%')->select_objects->list;
+    $p = $ds1->query('My::Employee')->fetch( $steve->id );
     is $p, $steve;
-    
 
 
     ok 1;

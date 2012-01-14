@@ -18,10 +18,17 @@ has 'hooks'         => (is => 'ro', isa => 'ArrayRef[Ormish::Mapping::Hook::Role
 # DSL attr for auto defining simple attributes-to-column mapping
 has 'attributes'    => (is => 'ro', isa => 'ArrayRef', default => sub { [ ] });
 
-has 'attr2col'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
-has 'col2attr'     => (is => 'ro', isa => 'HashRef', default => sub { { } });
-has 'oid_attr2col' => (is => 'ro', isa => 'HashRef', default => sub { { } });
-has 'oid_col2attr' => (is => 'ro', isa => 'HashRef', default => sub { { } });
+# for simple ones
+has 'attr2col'          => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has 'col2attr'          => (is => 'ro', isa => 'HashRef', default => sub { { } });
+
+# for oids
+has 'oid_attr2col'      => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has 'oid_col2attr'      => (is => 'ro', isa => 'HashRef', default => sub { { } });
+
+# for hook-managed 
+has 'hooks_attr2col'    => (is => 'ro', isa => 'HashRef', default => sub { { } });
+has 'hooks_col2attr'    => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
 has '_reverse_rel'      => (is => 'ro', isa => 'HashRef', default => sub { { } });
 
@@ -46,6 +53,7 @@ sub _setup_attrs {
     my @attributes = ();
     my %a2c = ();
     my %a2ma = ();
+
     my %c2a = ();
     my %oid_c2a  = ();
     my %oid_a2c  = ();
@@ -78,6 +86,23 @@ sub _setup_attrs {
         if (exists $oid_attrs{$meth}) {
             $oid_c2a{$col} = $meth;
             $oid_a2c{$meth} = $col;
+        }
+    }
+
+    # attrs managed by hooks, we need to identify which columns are part of the oid
+    if ($self->has_hooks) {
+        foreach my $hook (@{$self->hooks}) {
+            next if (not $hook->can('get_attr_to_col'));
+            my $ha2c = $hook->get_attr_to_col;
+            foreach my $meth (keys %$ha2c) {
+                my $col = $ha2c->{$meth};
+                if (exists $oid_attrs{$meth}) {
+                    $oid_c2a{$col} = $meth;
+                    $oid_a2c{$meth} = $col;
+                }
+                $self->hooks_attr2col->{$meth} = $col;
+                $self->hooks_col2attr->{$col} = $meth;
+            }
         }
     }
 
@@ -176,23 +201,9 @@ sub get_reverse_relation_info {
 }
 
 
-sub oid_attr_to_col {
-    return $_[0]->oid_attr2col;
-}
-sub oid_col_to_attr {
-    return $_[0]->oid_col2attr;
-}
-
 sub attr_to_col {
     my ($self, $exclude_oid) = @_;
-    my %hooks_a2c = ();
-    if ($self->has_hooks) {
-        foreach my $hook (@{$self->hooks}) {
-            %hooks_a2c = (%hooks_a2c, $hook->get_attr_to_col);
-        }
-    }
-    my %h = ( %{$self->attr2col}, %hooks_a2c );
-    my %oid_h = ();
+    my %h = ( %{$self->attr2col}, %{$self->hooks_attr2col} );
     if ($exclude_oid) {
         my $oid_attr2col = $self->oid_attr2col;
         foreach my $attr (keys %$oid_attr2col) {
@@ -204,7 +215,7 @@ sub attr_to_col {
 
 sub col_to_attr {
     my ($self, $exclude_oid) = @_;
-    my %h = %{$self->col2attr}; # copy
+    my %h = ( %{$self->col2attr}, %{$self->hooks_col2attr} );
     if ($exclude_oid) {
         my $oid_col2attr = $self->oid_col2attr;
         foreach my $col (keys %$oid_col2attr) {
@@ -213,6 +224,16 @@ sub col_to_attr {
     }
     return \%h;
 }
+
+sub oid_attr_to_col {
+    return $_[0]->oid_attr2col;
+}
+
+sub oid_col_to_attr {
+    return $_[0]->oid_col2attr;
+}
+
+
 
 sub related_object_oid_col_values {
     my ($self, $datastore, $relation_name, $rel_obj) = @_;
@@ -235,7 +256,6 @@ sub related_object_oid_col_values {
 sub object_insert_table_rows {
     my ($self, $datastore, $obj) = @_;
     my %table_rows = ();
-    my @rows = ();
     {
         my $attr_to_col     = $self->attr2col;
         my $oid_attr_to_col = $self->oid_attr2col;
@@ -276,8 +296,8 @@ sub object_insert_table_rows {
     {
         if ($self->has_hooks) {
             foreach my $hook (@{$self->hooks}) {
-                if ($hook->can('after_object_insert_table_rows')) {
-                    $hook->after_object_insert_table_rows($self, \%table_rows, $datastore, $obj);
+                if ($hook->can('object_insert_table_rows_hook')) {
+                    $hook->object_insert_table_rows_hook($self, \%table_rows, $datastore, $obj);
                 }
             }
         }
@@ -285,9 +305,10 @@ sub object_insert_table_rows {
     return \%table_rows;
 }
 
+
 sub object_update_table_rows {
     my ($self, $datastore, $obj, $obj_oid_attr_values) = @_;
-    my @rows = ();
+    my %table_rows = ();
     {
         my $attr_to_col     = $self->attr2col;
         my $oid_attr_to_col = $self->oid_attr2col;
@@ -326,11 +347,19 @@ sub object_update_table_rows {
             $where{$col} = $obj_oid_attr_values->{$oid_attr};
         }
         # ---
-        push @rows, [ \%row, \%where ];
+        $table_rows{$self->table} = [ [ \%row, \%where ] ];
     }
-    return { 
-        $self->table() => \@rows,
-    };
+    # run hooks
+    {
+        if ($self->has_hooks) {
+            foreach my $hook (@{$self->hooks}) {
+                if ($hook->can('object_update_table_rows_hook')) {
+                    $hook->object_update_table_rows_hook($self, \%table_rows, $datastore, $obj, $obj_oid_attr_values)
+                }
+            }
+        }
+    }
+    return \%table_rows;
 }
 
 
@@ -342,8 +371,8 @@ sub table_columns_for_select {
     $tc{$table} = { map { $_ => 1 } keys %{$self->attr_to_col} };
     if ($self->has_hooks) {
         foreach my $hook (@{$self->hooks}) {
-            if ($hook->can('after_table_columns_for_select')) {
-                $hook->after_table_columns_for_select($self, \%tc);
+            if ($hook->can('table_columns_for_select_hook')) {
+                $hook->table_columns_for_select_hook($self, \%tc);
             }
         }
     }
@@ -392,9 +421,10 @@ sub meta_traverse_relations {
 sub new_object_from_hashref {
     my ($self, $datastore, $h) = @_;
     my $obj_class   = $self->for_class;
-    my $c2a         = $self->col_to_attr;
+    my $c2a         = $self->col2attr; # simple attributes only
     my $a2rel       = $self->relations;
     my %oh = ();
+
     # build primitive types
     foreach my $col (keys %$h) { 
         next if (not exists $c2a->{$col});
@@ -422,6 +452,15 @@ sub new_object_from_hashref {
         $oh{$rel_at} = $proxy;
     }
 
+    # build attribute via hooks
+    if ($self->has_hooks) {
+        foreach my $hook (@{$self->hooks}) {
+            if ($hook->can('new_object_from_hashref_hook')) {
+                $hook->new_object_from_hashref_hook($self, $datastore, $h, \%oh);
+            }
+        }
+    }
+
     # exclude non-required columns that are undefined
     my %oh_nulls    = ();
     my $metaclass   = $obj_class->meta;
@@ -431,6 +470,7 @@ sub new_object_from_hashref {
             $oh_nulls{$at} = delete $oh{$at};
         }
     }
+
     
     # FIXME:    for now, bypass Moose construction, 
     #           the reason being that the data is from the database, 

@@ -154,6 +154,7 @@ sub _build_select {
     # TODO: add multi-table mapping of a class
     {
         my ($class, $table, $alias) = splice(@cta, 0, 3);
+        my $m = $datastore->mapping_of_class($class);
 
         # build query
         # ---
