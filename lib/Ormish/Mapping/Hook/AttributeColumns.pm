@@ -14,6 +14,15 @@ sub get_attr_to_col {
     return $self->attr_to_col;
 }
 
+sub get_attribute_bind_value {
+    my ($self, $attribute, $bind_value) = @_;
+    if (exists($self->attr_to_col->{$attribute}) and $self->has_pack) {
+        return $self->pack->($bind_value);
+    }
+    return $bind_value;
+}
+
+# FIXME: unused for now
 sub table_columns_for_select_hook {
     my ($self, $mapping, $tcols) = @_;
     my $table = $mapping->table;

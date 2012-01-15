@@ -20,6 +20,7 @@ use DateTime::Format::SQLite;
 use Ormish;
 use Ormish::Mapping::Hook::AttributeColumns;
 use FindBin;
+use YAML;
 use lib "$FindBin::Bin/lib";
 
 
@@ -64,7 +65,7 @@ $ds1->register_mapping(
     my ($o, $p);
 
     # insert
-    my $steve = My::Employee->new(name => 'Steve Jobz', start_date => DateTime->new(year => 1971, month => 4, day => 1), );
+    my $steve = My::Employee->new(name => 'Steve Jobz', start_date => DateTime->new(year => 1971, month => 4, day => 1));
     $ds1->add($steve);
     $ds1->commit;
 
@@ -81,7 +82,27 @@ $ds1->register_mapping(
 
     $p = $ds1->query('My::Employee')->fetch( $steve->id );
     is $p, $steve;
+    is $p->name, 'Steve Jobs';
 
+    my $raskin = My::Employee->new(name => 'Jef Raskin', start_date => DateTime->new(year => 1978, month => 1, day => 1));
+    $ds1->add($raskin);
+    $ds1->commit;
+
+    ($o) = $ds1->query('My::Employee')
+               ->where('{start_date} > ?', 
+                       [ 'start_date', DateTime->new(year => 1975, month => 1, day => 1) ], # hint bind type
+                       )
+               ->select_objects
+               ->list
+               ;
+    is $o, $raskin;
+
+    # steve died!
+    $ds1->delete($steve);
+    $ds1->commit;
 
     ok 1;
+    #diag YAML::Dump(\@sql);
+    is scalar(@sql), 6, 'complete sql count';
+
 }

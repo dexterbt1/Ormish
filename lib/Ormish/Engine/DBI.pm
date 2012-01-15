@@ -232,6 +232,7 @@ sub _build_select {
         $stmt = $query->interpolate_result_qkv($tmp_stmt);
 
         @bind = (@sql_sel_bind, @sql_where_bind);
+        @bind = $m->process_query_bind_values(\@bind);
     }
     return ($stmt, \@bind, \%user_columns);
 

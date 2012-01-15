@@ -363,6 +363,29 @@ sub object_update_table_rows {
 }
 
 
+# expand/collapse the bind values as necessary
+sub process_query_bind_values {
+    my ($self, $bind_values) = @_;
+    my @bind = ();
+    foreach my $bv (@$bind_values) {
+        my $processed_bv= $bv;
+        if (defined($bv) and (ref($bv) eq 'ARRAY')) {
+            my ($attr, $attr_bv) = @$bv;
+            $processed_bv = $attr_bv;
+            if ($self->has_hooks) {
+                foreach my $hook (@{$self->hooks}) {
+                    if ($hook->can('get_attribute_bind_value')) {
+                        $processed_bv = $hook->get_attribute_bind_value($attr, $attr_bv);
+                    }
+                }
+            }
+        }
+        push @bind, $processed_bv;
+    }
+    return @bind;
+}
+
+
 # return { table1 => { col1 => 1, col2 => 1, ... }, ... }
 sub table_columns_for_select { 
     my ($self) = @_;
