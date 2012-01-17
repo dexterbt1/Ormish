@@ -1,0 +1,110 @@
+{
+    package My::User;
+    use Moose;
+    use namespace::autoclean;
+    use Set::Object;
+    use DateTime;
+    has 'id'            => (isa => 'Int', is => 'rw');
+    has 'name'          => (isa => 'Str', is => 'rw');
+    has 'login'         => (isa => 'Str', is => 'rw');
+    has 'password_hash' => (isa => 'Str', is => 'rw');
+    has 'last_login'    => (isa => 'DateTime', is => 'rw');
+    has 'addresses'     => (isa => 'Set::Object', is => 'rw');
+    1;
+    __PACKAGE__->meta->make_immutable;
+
+    package My::Address;
+    use Moose;
+    use namespace::autoclean;
+    has 'id'                => (isa => 'Int', is => 'rw');
+    has 'user'              => (isa => 'My::User', is => 'rw', weak_ref => 1);
+    has 'street_address'    => (isa => 'Str', is => 'rw');
+    has 'city'              => (isa => 'Str', is => 'rw');
+    has 'zip'               => (isa => 'Int', is => 'rw');
+    has 'country_code'      => (isa => 'Str', is => 'rw');
+    1;
+    __PACKAGE__->meta->make_immutable;
+
+    
+}
+
+package main;
+use strict;
+use SQL::Expr;
+
+my $user_table = SQL::Expr::Schema::Table->new(
+    -name       => 'user', 
+    -columns    => [
+        SQL::Expr::Schema::Column->new( -name => 'uid',             -type => 'Int' ),
+        SQL::Expr::Schema::Column->new( -name => 'name',            -type => 'VarChar' ),
+        SQL::Expr::Schema::Column->new( -name => 'login',           -type => 'VarChar' ),
+        SQL::Expr::Schema::Column->new( -name => 'c_password_hash', -type => 'VarChar' ),
+        SQL::Expr::Schema::Column->new( -name => 'last_login',      -type => 'Date' ),
+    ],
+);
+
+my $address_table = SQL::Expr::Schema::Table->new(
+    -name       => 'address',
+    -columns    => [
+        SQL::Expr::Schema::Column->new( -name   => 'uid',           -type => 'Int' ),
+        SQL::Expr::Schema::Column->new( -name   => 'user_id',       -type => 'Int' ),
+        SQL::Expr::Schema::Column->new( -name   => 'street_address', -type => 'VarChar' ),
+        SQL::Expr::Schema::Column->new( -name   => 'city',          -type => 'VarChar' ),   
+        SQL::Expr::Schema::Column->new( -name   => 'zip',           -type => 'Int' ),
+        SQL::Expr::Schema::Column->new( -name   => 'country_code',  -type => 'VarChar' ),      
+    ],
+);
+
+my $user_mapping = Ormish::Mapping->new( 
+    for_class   => 'My::User', 
+    table       => $user_table,
+    oid         => Ormish::Mapping::OID::Auto->new( attribute => 'id' ),
+    attributes  => {
+        id              => $user_table->c->uid,
+        name            => $user_table->c->name,
+        login           => $user_table->c->login,
+        password_hash   => $user_table->c->c_password_hash,
+        last_login      => $user_table->c->last_login,
+        addresses       => Ormish::Mapping::Relation::OneToMany( 
+                                to_class    => 'My::Address', 
+                                join        => [ $user_table->c->id == $address_table->c->user_id ],
+                            ),
+    },
+);
+
+my $address_mapping = Ormish::Mapping->new(
+    for_class   => 'My::Address',
+    table       => $address_table,
+    oid         => Ormish::Mapping::OID::Auto->new( attribute => 'id' ),
+    attributes  => {
+        id              => $address_table->c->uid,
+        user            => Ormish::Mapping::Relation::ManyToOne(
+                                to_class    => 'My::User',
+                                join        => [ $user_table->c->id == $address_table->c->user_id ],
+                            ),
+        street_address  => $address_table->c->street_address,
+        city            => $address_table->c->city,
+        zip             => $address_table->c->zip,
+        country_code    => $address_table->c->country_code,
+    },
+);
+
+
+$ds->register_mappings([ $user_mapping ]);
+
+my @users = 
+    $ds->new_query->from('My::User|u')->join('My::Address|a')->where('{u.login} = ?', $login)->add_eager_join('addresses')->select_objects->list;
+
+my $q = Ormish::Query::Search->new( from => 'My::User', include_related => [ 'addresses' ] );
+my $q = Ormish::Query::RawSQL->new( statement => 'SELECT * ', bind => [ ] ); 
+my $result = $ds->execute_query( $q );
+    
+    
+
+        
+
+$ds->query('My::User', 'My::Address')->select_objects()
+
+
+
+__END__
